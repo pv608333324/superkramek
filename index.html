@@ -1,0 +1,2752 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Dětská Pokladna & Banka 🛒💳</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- html5-qrcode for Camera QR scanning -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  
+  <!-- QRCode.js for generating QR tags -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Google Fonts: Fredoka & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            fredoka: ['Fredoka', 'sans-serif'],
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+          colors: {
+            pos: {
+              yellow: '#FBBF24',
+              orange: '#F97316',
+              green: '#22C55E',
+              blue: '#38BDF8',
+              purple: '#A855F7',
+              pink: '#EC4899',
+              dark: '#0F172A',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* iPhone 8 & Mobile Touch Ergonomics (Portrait & Landscape Chrome/Safari fix) */
+    html {
+      height: -webkit-fill-available;
+      height: 100%;
+      overflow: hidden;
+      background-color: #FFFBEB;
+    }
+
+    body {
+      font-family: 'Fredoka', 'Inter', -apple-system, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      min-height: -webkit-fill-available;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background-color: #FFFBEB;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    /* Prevent auto-zoom on iPhone when tapping input fields */
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+
+    /* Smooth momentum scrolling for iOS */
+    .ios-scroll {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+
+    /* Hide scrollbars for clean mobile appearance */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Card visual shine */
+    .card-chip {
+      background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+      box-shadow: inset 0 0 4px rgba(0,0,0,0.3);
+    }
+
+    /* Thermal receipt & Card printing (58mm / 80mm) */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #printable-receipt-area, #printable-receipt-area * {
+        visibility: visible !important;
+      }
+      #printable-receipt-area {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 58mm !important;
+        margin: 0 !important;
+        padding: 4mm !important;
+        background: #fff !important;
+        color: #000 !important;
+        font-family: monospace, -apple-system !important;
+        font-size: 11px !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body id="app-shell" class="w-full h-full overflow-hidden text-slate-800 m-0 p-0">
+
+  <!-- TOP ACTION BAR (Grid row 1, always locked at top edge) -->
+  <header class="w-full bg-amber-400 border-b-2 border-amber-500 shadow-sm px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] flex items-center justify-between gap-2 z-40">
+    <!-- Bluetooth Printer Status Button -->
+    <button onclick="toggleBluetoothConnection()" id="btn-bt-connect" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-amber-300 shadow-xs active:scale-95 transition">
+      <i data-lucide="printer" class="w-4 h-4 text-slate-500" id="bt-icon"></i>
+      <span id="bt-status-text">Tisk</span>
+      <span id="bt-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+    </button>
+
+    <!-- Fast QR Scan Button -->
+    <button onclick="openScannerModal('product')" class="flex items-center gap-1.5 bg-blue-600 active:bg-blue-700 text-white font-bold px-3.5 py-1.5 rounded-xl shadow-xs text-xs active:scale-95 transition">
+      <i data-lucide="scan" class="w-4 h-4"></i>
+      <span>Skenovat</span>
+    </button>
+
+    <!-- Basket Trigger (with badge) -->
+    <button onclick="openBasketSheet()" id="btn-basket-badge" class="relative flex items-center gap-1.5 bg-emerald-600 active:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-xs active:scale-95 transition">
+      <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+      <span id="header-basket-price">0 Kč</span>
+      <span id="header-basket-count" class="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">0</span>
+    </button>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- MAIN SCROLLABLE APP BODY (Grid row 2: minmax(0, 1fr)) -->
+  <!-- ========================================================================= -->
+  <main class="w-full h-full min-h-0 overflow-hidden relative">
+    
+    <!-- 1. VIEW: POKLADNA (POS) -->
+    <section id="view-pos" class="h-full flex flex-col p-2.5 space-y-2">
+      <!-- Search Input -->
+      <div class="relative shrink-0">
+        <input type="text" id="pos-search" oninput="renderPosGrid()" placeholder="Hledej zboží..." 
+          class="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-amber-200 focus:outline-none focus:border-amber-400 font-semibold text-slate-800 placeholder-slate-400 text-sm">
+        <i data-lucide="search" class="w-4 h-4 text-amber-400 absolute left-2.5 top-2.5"></i>
+      </div>
+
+      <!-- Categories Pills Horizontal Bar -->
+      <div class="flex gap-1.5 overflow-x-auto py-0.5 no-scrollbar shrink-0" id="pos-category-bar">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Compact 2-column Grid suited for iPhone 8 (375px width) -->
+      <div id="pos-products-grid" class="flex-1 overflow-y-auto ios-scroll grid grid-cols-2 gap-2 pb-4">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+
+
+    <!-- 2. VIEW: DĚTSKÁ BANKA & KARTY -->
+    <section id="view-bank" class="h-full hidden flex-col p-3 overflow-y-auto ios-scroll pb-6 space-y-3">
+      <!-- Bank Header Banner -->
+      <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-3 text-white shadow-sm flex items-center justify-between shrink-0">
+        <div>
+          <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-200">Dětská Národní Banka</div>
+          <h2 class="text-lg font-extrabold leading-tight">Platební Karty</h2>
+        </div>
+        <button onclick="openCardEditModal()" class="flex items-center gap-1 bg-white/20 active:bg-white/30 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Nová karta</span>
+        </button>
+      </div>
+
+      <!-- Bank Cards List -->
+      <div id="bank-cards-list" class="space-y-3">
+        <!-- Injected via JS -->
+      </div>
+    </section>
+
+
+    <!-- 3. VIEW: SKLAD -->
+    <section id="view-stock" class="h-full hidden flex-col p-3 overflow-y-auto ios-scroll pb-6 space-y-3">
+      <div class="flex items-center justify-between shrink-0">
+        <div>
+          <h2 class="text-base font-extrabold text-slate-800">Skladové zásoby</h2>
+          <p class="text-[11px] text-slate-500">Správa zboží a tisk štítků</p>
+        </div>
+        <div class="flex gap-1">
+          <button onclick="openProductModal()" class="flex items-center gap-1 bg-amber-500 active:bg-amber-600 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow transition">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Zboží</span>
+          </button>
+          <button onclick="resetDefaultProducts()" class="text-[11px] text-slate-500 bg-white border border-slate-200 px-2 py-1.5 rounded-xl" title="Obnovit výchozí">
+            Obnovit
+          </button>
+        </div>
+      </div>
+
+      <!-- Products compact list -->
+      <div id="stock-items-list" class="space-y-2">
+        <!-- Injected via JS -->
+      </div>
+    </section>
+
+
+    <!-- 4. VIEW: TISK PENĚZ & NASTAVENÍ -->
+    <section id="view-more" class="h-full hidden flex-col p-3 overflow-y-auto ios-scroll pb-6 space-y-3">
+      <!-- X6 Mini Printer Control Card -->
+      <div class="bg-white rounded-2xl p-3 border border-indigo-200 shadow-sm space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+            <i data-lucide="bluetooth" class="w-4 h-4 text-indigo-600"></i>
+            <span>Tiskárna X6 (Bluefy BLE)</span>
+          </h3>
+          <span id="printer-panel-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Nepřipojeno</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Protokol</label>
+            <select id="printer-protocol" onchange="setPrinterProtocol(this.value)" class="w-full px-2 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 text-slate-800">
+              <option value="x6" selected>X6 (51 78 · klasický)</option>
+              <option value="x6_new">X6 novější (22 21)</option>
+              <option value="x6_12">X6 prefix (12 51 78)</option>
+              <option value="escpos">ESC/POS (58mm)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Sytost tisku (X6)</label>
+            <select id="printer-energy" onchange="setPrinterEnergy(this.value)" class="w-full px-2 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 text-slate-800">
+              <option value="12000">Světlý</option>
+              <option value="18000" selected>Střední (doporučeno)</option>
+              <option value="24000">Tmavý</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-1.5">
+          <button onclick="toggleBluetoothConnection()" class="py-2 bg-indigo-600 active:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition">
+            <i data-lucide="bluetooth" class="w-3.5 h-3.5"></i>
+            <span>Připojit</span>
+          </button>
+          <button onclick="printX6TestPage()" class="py-2 bg-emerald-50 active:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            <span>Test</span>
+          </button>
+          <button onclick="feedX6Paper()" class="py-2 bg-amber-50 active:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition">
+            <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+            <span>Posun</span>
+          </button>
+        </div>
+
+        <!-- Live Print Progress Bar -->
+        <div id="print-progress-wrap" class="hidden space-y-1 pt-1">
+          <div class="flex justify-between text-[10px] font-bold text-indigo-700">
+            <span id="print-progress-label">Odesílám data do X6...</span>
+            <span id="print-progress-pct">0 %</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div id="print-progress-bar" class="h-full bg-indigo-600 transition-all duration-100" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Diagnostic Log for Bluefy / X6 troubleshooting -->
+        <div class="pt-1">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-bold text-slate-500 uppercase">Diagnostika (Bluefy / X6)</span>
+            <div class="flex gap-2">
+              <button onclick="copyBtLog()" class="text-[10px] font-bold text-emerald-600">Kopírovat</button>
+              <button onclick="clearBtLog()" class="text-[10px] font-bold text-indigo-600">Vymazat</button>
+            </div>
+          </div>
+          <pre id="bt-debug-log" class="bg-slate-900 text-emerald-400 text-[10px] font-mono p-2 rounded-xl max-h-28 overflow-y-auto whitespace-pre-wrap leading-snug">Připraveno. Klikni na Připojit.</pre>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-3 border border-amber-200 shadow-sm">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-1.5 mb-2">
+          <span>💵 Herní papírové peníze</span>
+        </h3>
+        <p class="text-xs text-slate-500 mb-3">Vytiskni si herní koruny na termopapír nebo do kapsy.</p>
+        
+        <div class="grid grid-cols-4 gap-2">
+          <button onclick="printMoney(10)" class="py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl font-black text-sm active:scale-95 transition">10 Kč</button>
+          <button onclick="printMoney(20)" class="py-2.5 bg-amber-200 hover:bg-amber-300 text-amber-950 rounded-xl font-black text-sm active:scale-95 transition">20 Kč</button>
+          <button onclick="printMoney(50)" class="py-2.5 bg-orange-100 hover:bg-orange-200 text-orange-950 rounded-xl font-black text-sm active:scale-95 transition">50 Kč</button>
+          <button onclick="printMoney(100)" class="py-2.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 rounded-xl font-black text-sm active:scale-95 transition">100 Kč</button>
+        </div>
+      </div>
+
+      <!-- Printing info banner -->
+      <div class="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-900 leading-relaxed">
+        <div class="font-bold flex items-center gap-1 mb-1">
+          <i data-lucide="info" class="w-4 h-4 text-blue-600"></i> Jak tisknout na X6 z iPhonu:
+        </div>
+        1. Zapni tiskárnu <b>X6</b> (zelený kroužek svítí).<br>
+        2. Otevři tuto pokladnu v aplikaci <b>Bluefy</b>.<br>
+        3. Klikni nahoře na <b>Tisk</b> (nebo tlačítko <b>Připojit</b> výše) a vyber zařízení <b>X6 / MX06 / GB01</b>.<br>
+        Účtenky, QR štítky, karty i peníze se tisknou graficky (384 px) včetně české diakritiky.
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BOTTOM NAVIGATION BAR (Grid row 3, always locked at bottom edge) -->
+  <nav class="w-full bg-white border-t border-amber-200 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
+    <button id="tab-pos" onclick="switchView('pos')" class="flex flex-col items-center gap-0.5 text-amber-600 font-bold text-[11px] py-1 px-3 rounded-xl transition">
+      <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+      <span>Pokladna</span>
+    </button>
+    <button id="tab-bank" onclick="switchView('bank')" class="flex flex-col items-center gap-0.5 text-slate-400 font-bold text-[11px] py-1 px-3 rounded-xl transition">
+      <i data-lucide="credit-card" class="w-5 h-5"></i>
+      <span>Banka</span>
+    </button>
+    <button id="tab-stock" onclick="switchView('stock')" class="flex flex-col items-center gap-0.5 text-slate-400 font-bold text-[11px] py-1 px-3 rounded-xl transition">
+      <i data-lucide="package" class="w-5 h-5"></i>
+      <span>Sklad</span>
+    </button>
+    <button id="tab-more" onclick="switchView('more')" class="flex flex-col items-center gap-0.5 text-slate-400 font-bold text-[11px] py-1 px-3 rounded-xl transition">
+      <i data-lucide="printer" class="w-5 h-5"></i>
+      <span>Tisk</span>
+    </button>
+  </nav>
+
+  <!-- TOAST NOTIFICATION (Non-blocking status & errors) -->
+  <div id="app-toast" class="fixed top-14 left-1/2 -translate-x-1/2 z-[100] hidden max-w-[90vw] px-4 py-2 rounded-2xl bg-slate-900/95 text-white text-xs font-bold shadow-lg text-center pointer-events-none transition-all"></div>
+
+  <!-- ========================================================================= -->
+  <!-- BOTTOM SHEET: BASKET & CHECKOUT -->
+  <!-- ========================================================================= -->
+  <div id="sheet-basket" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-end justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-3xl max-h-[88dvh] flex flex-col overflow-hidden shadow-2xl">
+      <!-- Sheet Header -->
+      <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-amber-50 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">🛒</span>
+          <h3 class="font-extrabold text-slate-800 text-sm">Nákupní košík</h3>
+          <span id="sheet-basket-count" class="text-[11px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">0 ks</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="clearBasket()" class="text-xs font-bold text-rose-500 px-2 py-1 rounded-lg active:bg-rose-50">Vysypat</button>
+          <button onclick="closeBasketSheet()" class="p-1 text-slate-400 hover:text-slate-600">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Basket Items List -->
+      <div id="sheet-basket-items" class="flex-1 overflow-y-auto ios-scroll p-3 space-y-2 min-h-[90px]">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Payment Controls Footer -->
+      <div class="p-3 bg-slate-50 border-t border-slate-200 space-y-2.5 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div class="flex justify-between items-center px-1">
+          <span class="text-xs font-bold text-slate-500 uppercase">Celkem k úhradě:</span>
+          <span id="sheet-basket-total" class="text-xl font-black text-emerald-600 font-fredoka">0 Kč</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-1.5 bg-slate-200 p-1 rounded-2xl">
+          <button id="pay-tab-cash" onclick="setPayMethod('cash')" class="py-2 rounded-xl font-bold text-xs bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 transition">
+            <span>💵 Hotovost</span>
+          </button>
+          <button id="pay-tab-card" onclick="setPayMethod('card')" class="py-2 rounded-xl font-bold text-xs text-slate-600 flex items-center justify-center gap-1 transition">
+            <span>💳 Karta s QR</span>
+          </button>
+        </div>
+
+        <!-- A) CASH PAYMENT FORM -->
+        <div id="pay-section-cash" class="space-y-2">
+          <div class="bg-white p-2 rounded-xl border border-slate-200 flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">Zákazník dává:</span>
+            <div class="flex items-center gap-1.5">
+              <input type="number" id="cash-input" oninput="calculateChange()" placeholder="0" 
+                class="w-20 text-right font-black text-base text-slate-800 focus:outline-none">
+              <span class="text-xs font-bold text-slate-500">Kč</span>
+              <button onclick="setExactCash()" class="text-[11px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold">Přesně</button>
+            </div>
+          </div>
+
+          <!-- Quick Denominations -->
+          <div class="grid grid-cols-5 gap-1">
+            <button onclick="addCash(10)" class="bg-white border rounded-lg py-1 text-xs font-bold active:bg-slate-100">10</button>
+            <button onclick="addCash(20)" class="bg-white border rounded-lg py-1 text-xs font-bold active:bg-slate-100">20</button>
+            <button onclick="addCash(50)" class="bg-white border rounded-lg py-1 text-xs font-bold active:bg-slate-100">50</button>
+            <button onclick="addCash(100)" class="bg-white border rounded-lg py-1 text-xs font-bold active:bg-slate-100">100</button>
+            <button onclick="addCash(200)" class="bg-white border rounded-lg py-1 text-xs font-bold active:bg-slate-100">200</button>
+          </div>
+
+          <div class="flex justify-between items-center text-xs px-1">
+            <span class="font-bold text-slate-500">Vrátit zákazníkovi:</span>
+            <span id="cash-change" class="font-extrabold text-base text-indigo-700 font-mono">0 Kč</span>
+          </div>
+
+          <button id="btn-pay-cash-action" onclick="executeCashCheckout()" disabled 
+            class="w-full py-3 bg-gradient-to-r from-emerald-500 to-green-600 disabled:opacity-40 text-white font-extrabold rounded-2xl shadow active:scale-98 transition flex items-center justify-center gap-2">
+            <span>Přijmout hotovost</span>
+            <i data-lucide="check" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- B) CARD PAYMENT FORM -->
+        <div id="pay-section-card" class="hidden space-y-2">
+          <p class="text-[11px] text-slate-500 text-center">Naskenuj QR kód na dětské kartě nebo vyber kartu ze seznamu.</p>
+          
+          <div class="flex gap-1.5">
+            <button onclick="openScannerModal('card_payment')" class="flex-1 py-3 bg-indigo-600 active:bg-indigo-700 text-white font-bold rounded-2xl shadow flex items-center justify-center gap-2 text-xs">
+              <i data-lucide="scan" class="w-4 h-4"></i>
+              <span>Pípnout kartu kamerou</span>
+            </button>
+          </div>
+
+          <!-- Quick Select Card Dropdown -->
+          <div class="bg-white p-2 rounded-xl border border-slate-200">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nebo vyber ze známých karet:</label>
+            <select id="select-pay-card" class="w-full text-xs font-bold text-slate-700 bg-white focus:outline-none">
+              <!-- Injected via JS -->
+            </select>
+          </div>
+
+          <button onclick="executeSelectedCardCheckout()" class="w-full py-2.5 bg-slate-800 text-white font-bold rounded-xl text-xs active:scale-98 transition">
+            Zaplatit vybranou kartou
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: QR SCANNER (CAMERA) -->
+  <!-- ========================================================================= -->
+  <div id="modal-scanner" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-4 flex flex-col items-center">
+      <div class="w-full flex justify-between items-center mb-2">
+        <h3 id="scanner-modal-title" class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+          <i data-lucide="scan" class="w-4 h-4 text-indigo-600"></i>
+          <span>Skenovat QR kód</span>
+        </h3>
+        <button onclick="closeScannerModal()" class="p-1 text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Scanner Camera Stream -->
+      <div id="qr-reader" class="w-full h-56 bg-slate-950 rounded-2xl overflow-hidden border-2 border-indigo-400"></div>
+
+      <p id="scanner-instruction-text" class="text-[11px] text-slate-500 mt-2 text-center">
+        Namiř fotoaparát na kód výrobku nebo platební karty.
+      </p>
+
+      <button onclick="closeScannerModal()" class="w-full mt-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
+        Zavřít
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: CREATE / EDIT BANK CARD -->
+  <!-- ========================================================================= -->
+  <div id="modal-card-edit" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-4 shadow-2xl">
+      <div class="flex justify-between items-center mb-3">
+        <h3 id="modal-card-title" class="text-base font-bold text-slate-800">Vystavit dětskou kartu</h3>
+        <button onclick="closeCardEditModal()" class="text-slate-400">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-card" onsubmit="saveCard(event)" class="space-y-3">
+        <input type="hidden" id="card-id">
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Jméno majitele karty</label>
+          <input type="text" id="card-owner" required placeholder="např. Tomík Novák" 
+            class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Číslo karty (ID)</label>
+            <input type="text" id="card-number" required placeholder="CARD-1001" 
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-xs font-bold uppercase">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Počáteční kredit</label>
+            <input type="number" id="card-balance" required min="0" value="200" 
+              class="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-sm text-emerald-600">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Barva / Styl karty</label>
+          <div class="grid grid-cols-4 gap-2">
+            <label class="cursor-pointer">
+              <input type="radio" name="card-color" value="from-blue-600 to-indigo-700" checked class="peer sr-only">
+              <div class="h-8 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 border-2 border-transparent peer-checked:border-slate-900 peer-checked:scale-105 transition"></div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="card-color" value="from-emerald-500 to-teal-700" class="peer sr-only">
+              <div class="h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border-2 border-transparent peer-checked:border-slate-900 peer-checked:scale-105 transition"></div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="card-color" value="from-purple-600 to-pink-600" class="peer sr-only">
+              <div class="h-8 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 border-2 border-transparent peer-checked:border-slate-900 peer-checked:scale-105 transition"></div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="card-color" value="from-amber-500 to-orange-600" class="peer sr-only">
+              <div class="h-8 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 border-2 border-transparent peer-checked:border-slate-900 peer-checked:scale-105 transition"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="pt-2 flex gap-2">
+          <button type="button" onclick="closeCardEditModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
+            Zrušit
+          </button>
+          <button type="submit" class="flex-1 py-2 bg-indigo-600 text-white font-bold rounded-xl text-xs shadow">
+            Uložit kartu
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: TOP-UP CARD (DOBÍJENÍ KREDITU / KAPESNÉ) -->
+  <!-- ========================================================================= -->
+  <div id="modal-card-topup" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-4 shadow-2xl">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="text-sm font-bold text-slate-800">Dobít kredit na kartu</h3>
+        <button onclick="closeCardTopupModal()" class="text-slate-400">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="text-center py-2">
+        <div id="topup-card-owner" class="font-bold text-base text-slate-900">Tomík</div>
+        <div class="text-xs text-slate-500">Současný zůstatek: <span id="topup-card-curr-balance" class="font-bold text-emerald-600">0 Kč</span></div>
+      </div>
+
+      <div class="grid grid-cols-4 gap-1.5 my-3">
+        <button onclick="addTopupValue(50)" class="py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl font-black text-xs text-amber-900">+50 Kč</button>
+        <button onclick="addTopupValue(100)" class="py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl font-black text-xs text-emerald-900">+100 Kč</button>
+        <button onclick="addTopupValue(200)" class="py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl font-black text-xs text-blue-900">+200 Kč</button>
+        <button onclick="addTopupValue(500)" class="py-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl font-black text-xs text-purple-900">+500 Kč</button>
+      </div>
+
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-semibold text-slate-500">Částka:</span>
+        <input type="number" id="topup-custom-amount" min="1" placeholder="Částka" 
+          class="flex-1 px-3 py-1.5 border border-slate-200 rounded-xl font-black text-center text-sm">
+        <span class="text-xs font-bold text-slate-600">Kč</span>
+      </div>
+
+      <button onclick="executeTopup()" class="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs shadow active:scale-98 transition">
+        Vložit na kartu
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: CARD PRINT PREVIEW (Šablona dětské karty k vytištění) -->
+  <!-- ========================================================================= -->
+  <div id="modal-card-print" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-4 text-center flex flex-col items-center">
+      <h3 class="text-sm font-bold text-slate-800 mb-1">Tisk dětské karty (58mm)</h3>
+      <p class="text-[11px] text-slate-500 mb-2">Vytiskni na samolepku k nalepení na starou kartu nebo kartičku.</p>
+
+      <!-- Thermal Printable Mockup -->
+      <div id="card-print-mockup" class="w-[210px] border-2 border-dashed border-slate-300 p-3 rounded-2xl bg-white shadow-inner flex flex-col items-center my-2">
+        <div class="text-[9px] font-black uppercase tracking-widest text-slate-800">DĚTSKÁ BANKA</div>
+        <div class="flex items-center gap-1 my-1">
+          <div class="w-4 h-3 bg-amber-400 rounded-sm border border-amber-600"></div>
+          <span class="text-[8px] font-mono font-bold">DEBIT CARD</span>
+        </div>
+        <div id="card-print-qr" class="my-1.5 p-1 bg-white"></div>
+        <div id="card-print-owner" class="text-xs font-extrabold text-slate-900 uppercase">TOMÍK NOVÁK</div>
+        <div id="card-print-number" class="text-[10px] font-mono tracking-widest text-slate-600">CARD-1001</div>
+      </div>
+
+      <div class="flex gap-2 w-full mt-2">
+        <button onclick="closeCardPrintModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
+          Zavřít
+        </button>
+        <button onclick="executeCardPrint()" class="flex-1 py-2 bg-indigo-600 text-white font-bold rounded-xl text-xs shadow flex items-center justify-center gap-1">
+          <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+          <span>Vytisknout</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: ADD / EDIT PRODUCT -->
+  <!-- ========================================================================= -->
+  <div id="modal-product" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-4 shadow-2xl">
+      <div class="flex justify-between items-center mb-2">
+        <h3 id="modal-product-title" class="text-base font-bold text-slate-800">Přidat zboží</h3>
+        <button onclick="closeProductModal()" class="text-slate-400">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="form-product" onsubmit="saveProduct(event)" class="space-y-2.5">
+        <input type="hidden" id="prod-id">
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ikona (Emoji)</label>
+          <div class="flex gap-1.5">
+            <input type="text" id="prod-icon" required maxlength="4" value="🍎" 
+              class="w-12 text-center text-xl py-1 border border-slate-200 rounded-xl">
+            <div class="flex-1 flex gap-1 items-center overflow-x-auto text-lg bg-amber-50 p-1 rounded-xl no-scrollbar">
+              <span class="cursor-pointer" onclick="setEmoji('🍎')">🍎</span>
+              <span class="cursor-pointer" onclick="setEmoji('🍌')">🍌</span>
+              <span class="cursor-pointer" onclick="setEmoji('🥐')">🥐</span>
+              <span class="cursor-pointer" onclick="setEmoji('🍭')">🍭</span>
+              <span class="cursor-pointer" onclick="setEmoji('🍦')">🍦</span>
+              <span class="cursor-pointer" onclick="setEmoji('🧸')">🧸</span>
+              <span class="cursor-pointer" onclick="setEmoji('🧃')">🧃</span>
+              <span class="cursor-pointer" onclick="setEmoji('🍫')">🍫</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Název zboží</label>
+          <input type="text" id="prod-name" required placeholder="např. Čerstvé jablko" 
+            class="w-full px-3 py-1.5 border border-slate-200 rounded-xl font-bold text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cena (Kč)</label>
+            <input type="number" id="prod-price" required min="1" value="15" 
+              class="w-full px-3 py-1.5 border border-slate-200 rounded-xl font-bold text-sm">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Skladem (ks)</label>
+            <input type="number" id="prod-stock" required min="0" value="10" 
+              class="w-full px-3 py-1.5 border border-slate-200 rounded-xl font-bold text-sm">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kategorie</label>
+            <select id="prod-category" class="w-full px-2 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white">
+              <option value="Ovoce a zelenina">Ovoce</option>
+              <option value="Pečivo">Pečivo</option>
+              <option value="Sladkosti">Sladkosti</option>
+              <option value="Nápoje">Nápoje</option>
+              <option value="Hračky">Hračky</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kód (SKU)</label>
+            <input type="text" id="prod-sku" required placeholder="PRD-001" 
+              class="w-full px-3 py-1.5 border border-slate-200 rounded-xl font-mono text-xs font-bold uppercase">
+          </div>
+        </div>
+
+        <div class="pt-2 flex gap-2">
+          <button type="button" onclick="closeProductModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
+            Zrušit
+          </button>
+          <button type="submit" class="flex-1 py-2 bg-amber-500 text-white font-bold rounded-xl text-xs shadow">
+            Uložit
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: PRODUCT LABEL PRINT PREVIEW -->
+  <!-- ========================================================================= -->
+  <div id="modal-label" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-4 text-center flex flex-col items-center">
+      <h3 class="text-sm font-bold text-slate-800 mb-1">Štítek na zboží (58mm)</h3>
+
+      <div class="w-[190px] border-2 border-dashed border-slate-300 p-3 rounded-xl bg-white shadow-inner flex flex-col items-center my-2">
+        <div id="label-emoji" class="text-2xl">🍎</div>
+        <div id="label-name" class="font-bold text-xs text-slate-900 leading-tight">Čerstvé jablko</div>
+        <div id="label-price" class="text-base font-black text-slate-900 my-0.5 font-mono">15 Kč</div>
+        <div id="label-qr" class="my-1 bg-white p-1"></div>
+        <div id="label-sku" class="text-[9px] font-mono tracking-widest text-slate-500">PRD-001</div>
+      </div>
+
+      <div class="flex gap-2 w-full mt-2">
+        <button onclick="closeLabelModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
+          Zavřít
+        </button>
+        <button onclick="executeLabelPrint()" class="flex-1 py-2 bg-indigo-600 text-white font-bold rounded-xl text-xs shadow flex items-center justify-center gap-1">
+          <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+          <span>Vytisknout</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: SUCCESS RECEIPT POPUP -->
+  <!-- ========================================================================= -->
+  <div id="modal-success" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-5 text-center flex flex-col items-center">
+      <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-2xl mb-2 animate-bounce">
+        🎉
+      </div>
+
+      <h3 class="text-xl font-bold text-slate-900">Nákup zaplacen!</h3>
+      <p id="modal-success-desc" class="text-xs text-slate-500 mt-0.5 mb-3">Zboží bylo odečteno ze skladu.</p>
+
+      <div id="modal-success-extra-box" class="w-full bg-amber-50 border border-amber-200 rounded-2xl p-2.5 mb-3 flex justify-between items-center text-left">
+        <div>
+          <span id="modal-success-extra-label" class="text-[10px] font-bold text-amber-800">Vráceno zákazníkovi:</span>
+          <div id="modal-success-extra-val" class="text-xl font-black text-amber-900 font-mono">0 Kč</div>
+        </div>
+        <div id="modal-success-extra-icon" class="text-2xl">🪙</div>
+      </div>
+
+      <div class="w-full space-y-1.5">
+        <button onclick="executeReceiptPrint()" class="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl shadow flex items-center justify-center gap-1.5 text-xs">
+          <i data-lucide="printer" class="w-4 h-4"></i>
+          <span>Vytisknout účtenku</span>
+        </button>
+        <button onclick="closeSuccessModal()" class="w-full py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
+          Další nákup
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- HIDDEN PRINT AREA FOR 58mm THERMAL FALLBACK / PDF -->
+  <!-- ========================================================================= -->
+  <div id="printable-receipt-area" class="hidden"></div>
+
+
+  <!-- ========================================================================= -->
+  <!-- LOGIC SCRIPT -->
+  <!-- ========================================================================= -->
+  <script>
+    /* =========================================================================
+       1. SYNTHETIC WEB AUDIO (Instant Feedback without external assets)
+       ========================================================================= */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(type) {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const now = audioCtx.currentTime;
+
+      if (type === 'beep') {
+        // High scanner beep
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(2000, now);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.09);
+      } else if (type === 'card_terminal') {
+        // POS Terminal Card Beep (double chime)
+        [1400, 1800].forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+          gain.gain.setValueAtTime(0.2, now + idx * 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.1 + 0.1);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now + idx * 0.1);
+          osc.stop(now + idx * 0.1 + 0.1);
+        });
+      } else if (type === 'kaching') {
+        // Register chime
+        [987.77, 1318.51, 1975.53].forEach((f, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f, now + idx * 0.07);
+          gain.gain.setValueAtTime(0.25, now + idx * 0.07);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.35);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now + idx * 0.07);
+          osc.stop(now + idx * 0.07 + 0.35);
+        });
+      } else if (type === 'error') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.setValueAtTime(90, now + 0.15);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'click') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(700, now);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.03);
+      }
+    }
+
+
+    /* =========================================================================
+       2. INITIAL DATA & STORAGE
+       ========================================================================= */
+    const DEFAULT_PRODUCTS = [
+      { id: 'PRD-001', name: 'Červené jablíčko', price: 15, stock: 10, category: 'Ovoce a zelenina', icon: '🍎' },
+      { id: 'PRD-002', name: 'Zralý banán', price: 20, stock: 8, category: 'Ovoce a zelenina', icon: '🍌' },
+      { id: 'PRD-003', name: 'Křupavý rohlík', price: 5, stock: 25, category: 'Pečivo', icon: '🥐' },
+      { id: 'PRD-004', name: 'Jahodové lízátko', price: 10, stock: 15, category: 'Sladkosti', icon: '🍭' },
+      { id: 'PRD-005', name: 'Kopečková zmrzlina', price: 25, stock: 6, category: 'Sladkosti', icon: '🍦' },
+      { id: 'PRD-006', name: 'Jablečný džusík', price: 30, stock: 8, category: 'Nápoje', icon: '🧃' },
+      { id: 'PRD-007', name: 'Plyšový medvídek', price: 120, stock: 3, category: 'Hračky', icon: '🧸' },
+      { id: 'PRD-008', name: 'Mléčná čokoláda', price: 45, stock: 7, category: 'Sladkosti', icon: '🍫' }
+    ];
+
+    const DEFAULT_CARDS = [
+      {
+        id: 'CARD-1001',
+        owner: 'Tomík',
+        balance: 350,
+        color: 'from-blue-600 to-indigo-700',
+        transactions: [
+          { date: '10.11. 10:15', note: 'Kapesné od babičky', amount: +200 },
+          { date: '10.11. 11:30', note: 'Nákup v obchůdku', amount: -50 }
+        ]
+      },
+      {
+        id: 'CARD-1002',
+        owner: 'Eliška',
+        balance: 240,
+        color: 'from-purple-600 to-pink-600',
+        transactions: [
+          { date: '10.11. 09:00', note: 'Založení karty', amount: +250 },
+          { date: '10.11. 12:00', note: 'Jahodové lízátko', amount: -10 }
+        ]
+      },
+      {
+        id: 'CARD-1003',
+        owner: 'Host / Mamka',
+        balance: 500,
+        color: 'from-amber-500 to-orange-600',
+        transactions: [
+          { date: '10.11. 08:30', note: 'Ranní vklad', amount: +500 }
+        ]
+      }
+    ];
+
+    let products = [];
+    let cards = [];
+    let basket = [];
+    let selectedCategory = 'Vše';
+    let currentPayMethod = 'cash'; // 'cash' | 'card'
+    let currentLastSale = null;
+    let labelItemToPrint = null;
+    let cardItemToPrint = null;
+    let cardToTopup = null;
+    let scannerContext = 'product'; // 'product' | 'card_payment'
+
+    function loadState() {
+      // Products
+      const savedProds = localStorage.getItem('kids_pos_products');
+      if (savedProds) {
+        try { products = JSON.parse(savedProds); } catch (e) { products = [...DEFAULT_PRODUCTS]; }
+      } else {
+        products = [...DEFAULT_PRODUCTS];
+        saveProducts();
+      }
+
+      // Bank Cards
+      const savedCards = localStorage.getItem('kids_pos_cards');
+      if (savedCards) {
+        try { cards = JSON.parse(savedCards); } catch (e) { cards = [...DEFAULT_CARDS]; }
+      } else {
+        cards = [...DEFAULT_CARDS];
+        saveCards();
+      }
+    }
+
+    function saveProducts() {
+      localStorage.setItem('kids_pos_products', JSON.stringify(products));
+    }
+
+    function saveCards() {
+      localStorage.setItem('kids_pos_cards', JSON.stringify(cards));
+    }
+
+    function resetDefaultProducts() {
+      if (confirm('Obnovit původní vzorové produkty?')) {
+        products = JSON.parse(JSON.stringify(DEFAULT_PRODUCTS));
+        saveProducts();
+        renderPosCategories();
+        renderPosGrid();
+        renderStockList();
+        playSound('kaching');
+      }
+    }
+
+
+    /* =========================================================================
+       3. NAVIGATION TABS (IPHONE 8 OPTIMIZED)
+       ========================================================================= */
+    function switchView(viewName) {
+      playSound('click');
+      const tabs = ['pos', 'bank', 'stock', 'more'];
+      tabs.forEach(v => {
+        const sec = document.getElementById(`view-${v}`);
+        const btn = document.getElementById(`tab-${v}`);
+        if (v === viewName) {
+          sec.classList.remove('hidden');
+          sec.classList.add('flex');
+          btn.className = 'flex flex-col items-center gap-0.5 text-amber-600 font-bold text-[11px] py-1 px-3 rounded-xl transition';
+        } else {
+          sec.classList.add('hidden');
+          sec.classList.remove('flex');
+          btn.className = 'flex flex-col items-center gap-0.5 text-slate-400 font-bold text-[11px] py-1 px-3 rounded-xl transition';
+        }
+      });
+
+      if (viewName === 'pos') {
+        renderPosCategories();
+        renderPosGrid();
+      } else if (viewName === 'bank') {
+        renderBankCards();
+      } else if (viewName === 'stock') {
+        renderStockList();
+      }
+      lucide.createIcons();
+    }
+
+
+    /* =========================================================================
+       4. POS MODE: PRODUCTS & BASKET
+       ========================================================================= */
+    function renderPosCategories() {
+      const categories = ['Vše', ...new Set(products.map(p => p.category))];
+      const bar = document.getElementById('pos-category-bar');
+      bar.innerHTML = categories.map(cat => `
+        <button onclick="selectCategory('${cat}')" 
+          class="px-2.5 py-1 rounded-xl font-bold text-xs whitespace-nowrap transition-all ${
+            selectedCategory === cat 
+              ? 'bg-amber-500 text-white shadow-sm' 
+              : 'bg-amber-100/80 text-amber-900 active:bg-amber-200'
+          }">
+          ${cat}
+        </button>
+      `).join('');
+    }
+
+    function selectCategory(cat) {
+      playSound('click');
+      selectedCategory = cat;
+      renderPosCategories();
+      renderPosGrid();
+    }
+
+    function renderPosGrid() {
+      const grid = document.getElementById('pos-products-grid');
+      const query = (document.getElementById('pos-search').value || '').toLowerCase();
+
+      const filtered = products.filter(p => {
+        const matchCategory = selectedCategory === 'Vše' || p.category === selectedCategory;
+        const matchQuery = p.name.toLowerCase().includes(query) || p.id.toLowerCase().includes(query);
+        return matchCategory && matchQuery;
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-2 py-10 text-center text-slate-400">
+            <span class="text-3xl">🔍</span>
+            <p class="font-bold text-xs mt-1">Zboží nenalezeno</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(p => {
+        const isOut = p.stock <= 0;
+        return `
+          <div onclick="${isOut ? "playSound('error')" : `addToBasket('${p.id}')`}" 
+            class="relative flex flex-col items-center justify-between p-2.5 rounded-2xl border bg-white active:scale-95 transition ${
+              isOut ? 'opacity-40 border-slate-200 bg-slate-50' : 'border-amber-200 shadow-sm active:border-amber-400'
+            }">
+            
+            <div class="absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+              isOut ? 'bg-rose-100 text-rose-700' : 'bg-amber-50 text-amber-900 border border-amber-200'
+            }">
+              ${isOut ? 'Vyprodáno' : `${p.stock} ks`}
+            </div>
+
+            <div class="text-4xl my-1 transform transition active:scale-110">
+              ${p.icon}
+            </div>
+
+            <div class="font-bold text-slate-800 text-xs text-center line-clamp-1 w-full px-1">
+              ${p.name}
+            </div>
+
+            <div class="text-sm font-black text-emerald-600 font-fredoka mt-0.5">
+              ${p.price} Kč
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addToBasket(productId) {
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      if (product.stock <= 0) {
+        playSound('error');
+        return;
+      }
+
+      const existing = basket.find(item => item.product.id === productId);
+      const inBasket = existing ? existing.quantity : 0;
+
+      if (inBasket >= product.stock) {
+        playSound('error');
+        alert(`Už nemáme víc kusů ${product.name} na skladě!`);
+        return;
+      }
+
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        basket.push({ product, quantity: 1 });
+      }
+
+      playSound('beep');
+      updateBasketHeader();
+    }
+
+    function updateBasketItemQty(productId, delta) {
+      playSound('click');
+      const idx = basket.findIndex(item => item.product.id === productId);
+      if (idx === -1) return;
+
+      const item = basket[idx];
+      const product = products.find(p => p.id === productId);
+
+      if (delta > 0) {
+        if (item.quantity >= product.stock) {
+          playSound('error');
+          return;
+        }
+        item.quantity += 1;
+      } else {
+        item.quantity -= 1;
+        if (item.quantity <= 0) {
+          basket.splice(idx, 1);
+        }
+      }
+      renderBasketSheet();
+      updateBasketHeader();
+    }
+
+    function clearBasket() {
+      if (basket.length === 0) return;
+      playSound('click');
+      basket = [];
+      renderBasketSheet();
+      updateBasketHeader();
+    }
+
+    function updateBasketHeader() {
+      const totalCount = basket.reduce((sum, it) => sum + it.quantity, 0);
+      const totalPrice = basket.reduce((sum, it) => sum + (it.quantity * it.product.price), 0);
+
+      document.getElementById('header-basket-count').innerText = totalCount;
+      document.getElementById('header-basket-price').innerText = `${totalPrice} Kč`;
+      
+      const badgeBtn = document.getElementById('btn-basket-badge');
+      if (totalCount > 0) {
+        badgeBtn.classList.add('animate-pulse');
+        setTimeout(() => badgeBtn.classList.remove('animate-pulse'), 400);
+      }
+    }
+
+    function openBasketSheet() {
+      playSound('click');
+      renderBasketSheet();
+      document.getElementById('sheet-basket').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeBasketSheet() {
+      playSound('click');
+      document.getElementById('sheet-basket').classList.add('hidden');
+    }
+
+    function renderBasketSheet() {
+      const container = document.getElementById('sheet-basket-items');
+      const countBadge = document.getElementById('sheet-basket-count');
+      const totalEl = document.getElementById('sheet-basket-total');
+      const payCashBtn = document.getElementById('btn-pay-cash-action');
+
+      const totalCount = basket.reduce((sum, it) => sum + it.quantity, 0);
+      const totalPrice = basket.reduce((sum, it) => sum + (it.quantity * it.product.price), 0);
+
+      countBadge.innerText = `${totalCount} ks`;
+      totalEl.innerText = `${totalPrice} Kč`;
+
+      if (basket.length === 0) {
+        container.innerHTML = `
+          <div class="py-8 text-center text-slate-300">
+            <i data-lucide="shopping-bag" class="w-10 h-10 mx-auto mb-1 stroke-1"></i>
+            <p class="font-medium text-xs">Košík je prázdný</p>
+          </div>
+        `;
+        if (payCashBtn) payCashBtn.disabled = true;
+      } else {
+        if (payCashBtn) payCashBtn.disabled = false;
+        container.innerHTML = basket.map(item => `
+          <div class="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">${item.product.icon}</span>
+              <div class="leading-tight">
+                <div class="text-xs font-bold text-slate-800">${item.product.name}</div>
+                <div class="text-[10px] text-slate-400">${item.product.price} Kč / ks</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <div class="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                <button onclick="updateBasketItemQty('${item.product.id}', -1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-700 active:bg-slate-200">-</button>
+                <span class="w-6 text-center font-bold text-xs font-mono">${item.quantity}</span>
+                <button onclick="updateBasketItemQty('${item.product.id}', 1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-700 active:bg-slate-200">+</button>
+              </div>
+              <div class="text-xs font-black text-slate-800 font-mono w-12 text-right">
+                ${item.quantity * item.product.price} Kč
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // Populate Card selector dropdown
+      const selectCard = document.getElementById('select-pay-card');
+      selectCard.innerHTML = cards.map(c => `
+        <option value="${c.id}">${c.owner} (${c.balance} Kč) - ${c.id}</option>
+      `).join('');
+
+      calculateChange();
+      lucide.createIcons();
+    }
+
+
+    /* =========================================================================
+       5. PAYMENT: CASH & CARD INTEGRATION
+       ========================================================================= */
+    function setPayMethod(method) {
+      playSound('click');
+      currentPayMethod = method;
+      const tabCash = document.getElementById('pay-tab-cash');
+      const tabCard = document.getElementById('pay-tab-card');
+      const secCash = document.getElementById('pay-section-cash');
+      const secCard = document.getElementById('pay-section-card');
+
+      if (method === 'cash') {
+        tabCash.className = 'py-2 rounded-xl font-bold text-xs bg-white text-slate-800 shadow-sm flex items-center justify-center gap-1 transition';
+        tabCard.className = 'py-2 rounded-xl font-bold text-xs text-slate-600 flex items-center justify-center gap-1 transition';
+        secCash.classList.remove('hidden');
+        secCard.classList.add('hidden');
+      } else {
+        tabCard.className = 'py-2 rounded-xl font-bold text-xs bg-white text-indigo-700 shadow-sm flex items-center justify-center gap-1 transition';
+        tabCash.className = 'py-2 rounded-xl font-bold text-xs text-slate-600 flex items-center justify-center gap-1 transition';
+        secCard.classList.remove('hidden');
+        secCash.classList.add('hidden');
+      }
+    }
+
+    function addCash(amount) {
+      playSound('click');
+      const input = document.getElementById('cash-input');
+      const current = parseInt(input.value) || 0;
+      input.value = current + amount;
+      calculateChange();
+    }
+
+    function setExactCash() {
+      playSound('click');
+      const totalPrice = basket.reduce((sum, it) => sum + (it.quantity * it.product.price), 0);
+      document.getElementById('cash-input').value = totalPrice;
+      calculateChange();
+    }
+
+    function calculateChange() {
+      const totalPrice = basket.reduce((sum, it) => sum + (it.quantity * it.product.price), 0);
+      const input = document.getElementById('cash-input');
+      const cashGiven = parseInt(input.value) || 0;
+      const changeEl = document.getElementById('cash-change');
+      const payBtn = document.getElementById('btn-pay-cash-action');
+
+      if (cashGiven === 0 || totalPrice === 0) {
+        changeEl.innerText = '0 Kč';
+        changeEl.className = 'font-bold text-slate-400 font-mono text-sm';
+        return;
+      }
+
+      const diff = cashGiven - totalPrice;
+      if (diff >= 0) {
+        changeEl.innerText = `${diff} Kč`;
+        changeEl.className = 'font-black text-emerald-600 font-mono text-base';
+        if (payBtn) payBtn.disabled = false;
+      } else {
+        changeEl.innerText = `Chybí ${Math.abs(diff)} Kč`;
+        changeEl.className = 'font-bold text-rose-500 font-mono text-xs';
+        if (payBtn) payBtn.disabled = true;
+      }
+    }
+
+    function finalizeSale(paymentType, details = {}) {
+      const totalPrice = basket.reduce((sum, it) => sum + (it.quantity * it.product.price), 0);
+
+      // Deduct inventory stock
+      basket.forEach(bItem => {
+        const prod = products.find(p => p.id === bItem.product.id);
+        if (prod) {
+          prod.stock = Math.max(0, prod.stock - bItem.quantity);
+        }
+      });
+      saveProducts();
+
+      // Record receipt
+      currentLastSale = {
+        receiptNo: Math.floor(1000 + Math.random() * 9000),
+        date: new Date().toLocaleDateString('cs-CZ') + ' ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }),
+        items: JSON.parse(JSON.stringify(basket)),
+        totalPrice,
+        paymentType,
+        ...details
+      };
+
+      // Close basket & reset
+      basket = [];
+      updateBasketHeader();
+      closeBasketSheet();
+      renderPosGrid();
+
+      // Show success modal
+      const extraLabel = document.getElementById('modal-success-extra-label');
+      const extraVal = document.getElementById('modal-success-extra-val');
+      const extraIcon = document.getElementById('modal-success-extra-icon');
+
+      if (paymentType === 'cash') {
+        extraLabel.innerText = 'Vráceno zákazníkovi:';
+        extraVal.innerText = `${details.changeToReturn || 0} Kč`;
+        extraIcon.innerText = '🪙';
+      } else {
+        extraLabel.innerText = `Karta: ${details.cardOwner}`;
+        extraVal.innerText = `Zůstatek: ${details.remainingBalance} Kč`;
+        extraIcon.innerText = '💳';
+      }
+
+      document.getElementById('modal-success').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function executeCashCheckout() {
+      const totalPrice = basket.reduce((sum, it) => sum + (it.quantity * it.product.price), 0);
+      const cashGiven = parseInt(document.getElementById('cash-input').value) || totalPrice;
+
+      if (cashGiven < totalPrice) {
+        playSound('error');
+        alert('Nedostatečná hotovost!');
+        return;
+      }
+
+      const changeToReturn = cashGiven - totalPrice;
+      playSound('kaching');
+      finalizeSale('cash', { cashGiven, changeToReturn });
+      document.getElementById('cash-input').value = '';
+    }
+
+    function executeCardPayment(cardId) {
+      const card = cards.find(c => c.id.toUpperCase() === cardId.toUpperCase());
+      const totalPrice = basket.reduce((sum, it) => sum + (it.quantity * it.product.price), 0);
+
+      if (!card) {
+        playSound('error');
+        alert(`Karta s kódem ${cardId} nebyla v Dětské bance nalezena!`);
+        return;
+      }
+
+      if (card.balance < totalPrice) {
+        playSound('error');
+        alert(`Nedostatek peněz na kartě ${card.owner}! Zůstatek je jen ${card.balance} Kč.`);
+        return;
+      }
+
+      // Deduct balance & record card transaction
+      card.balance -= totalPrice;
+      card.transactions.unshift({
+        date: new Date().toLocaleDateString('cs-CZ') + ' ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }),
+        note: 'Nákup v krámku',
+        amount: -totalPrice
+      });
+      saveCards();
+
+      playSound('card_terminal');
+      finalizeSale('card', {
+        cardId: card.id,
+        cardOwner: card.owner,
+        remainingBalance: card.balance
+      });
+    }
+
+    function executeSelectedCardCheckout() {
+      const cardId = document.getElementById('select-pay-card').value;
+      if (!cardId) {
+        alert('Není vybrána žádná karta!');
+        return;
+      }
+      executeCardPayment(cardId);
+    }
+
+    function closeSuccessModal() {
+      playSound('click');
+      document.getElementById('modal-success').classList.add('hidden');
+    }
+
+
+    /* =========================================================================
+       6. DĚTSKÁ BANKA: CARDS CRUD, TOP-UP & MANAGEMENT
+       ========================================================================= */
+    function renderBankCards() {
+      const container = document.getElementById('bank-cards-list');
+      if (cards.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+            <span class="text-3xl">💳</span>
+            <p class="font-bold text-xs mt-1">Zatím nemáš žádnou dětskou kartu</p>
+            <button onclick="openCardEditModal()" class="mt-2 text-xs text-indigo-600 font-bold underline">Vystavit první kartu</button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = cards.map(c => `
+        <div class="bg-white rounded-2xl p-3 border border-slate-200 shadow-sm space-y-2.5">
+          <!-- Realistic Plastic Card Graphic Header -->
+          <div class="rounded-xl p-3 bg-gradient-to-r ${c.color} text-white shadow relative overflow-hidden flex flex-col justify-between h-28">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="text-[8px] font-black uppercase tracking-wider text-white/70">Dětská Národní Banka</div>
+                <div class="text-sm font-black tracking-wide">${c.owner}</div>
+              </div>
+              <div class="text-[9px] font-mono bg-white/20 px-2 py-0.5 rounded-full backdrop-blur-xs font-bold">
+                ${c.id}
+              </div>
+            </div>
+
+            <!-- Card Chip & Wireless icon -->
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-4 rounded card-chip border border-amber-300/60"></div>
+              <i data-lucide="wifi" class="w-3.5 h-3.5 text-white/80 rotate-90"></i>
+            </div>
+
+            <!-- Balance on Card -->
+            <div class="flex justify-between items-end">
+              <div class="text-[9px] text-white/80 uppercase font-semibold">Zůstatek na kartě:</div>
+              <div class="text-lg font-black font-fredoka">${c.balance} Kč</div>
+            </div>
+          </div>
+
+          <!-- Card Actions Row -->
+          <div class="flex gap-1.5 pt-1">
+            <button onclick="openCardTopupModal('${c.id}')" class="flex-1 py-1.5 bg-emerald-50 active:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+              <span>Dobít kredit</span>
+            </button>
+
+            <button onclick="openCardPrintModal('${c.id}')" class="flex-1 py-1.5 bg-indigo-50 active:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+              <span>Vytisknout</span>
+            </button>
+
+            <button onclick="deleteCard('${c.id}')" class="p-1.5 bg-rose-50 text-rose-600 rounded-xl border border-rose-200">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Mini Transactions History -->
+          <details class="text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+            <summary class="cursor-pointer font-bold text-slate-600 hover:text-slate-800">Historie plateb (${c.transactions ? c.transactions.length : 0})</summary>
+            <div class="mt-1.5 space-y-1">
+              ${(c.transactions || []).slice(0, 4).map(tx => `
+                <div class="flex justify-between items-center text-[10px] bg-slate-50 p-1 rounded">
+                  <span>${tx.date}: ${tx.note}</span>
+                  <span class="font-bold font-mono ${tx.amount < 0 ? 'text-rose-600' : 'text-emerald-600'}">
+                    ${tx.amount > 0 ? '+' : ''}${tx.amount} Kč
+                  </span>
+                </div>
+              `).join('')}
+            </div>
+          </details>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function openCardEditModal() {
+      playSound('click');
+      const form = document.getElementById('form-card');
+      form.reset();
+      document.getElementById('card-id').value = '';
+      const nextCardNum = 1000 + cards.length + 1;
+      document.getElementById('card-number').value = `CARD-${nextCardNum}`;
+      document.getElementById('modal-card-edit').classList.remove('hidden');
+    }
+
+    function closeCardEditModal() {
+      document.getElementById('modal-card-edit').classList.add('hidden');
+    }
+
+    function saveCard(e) {
+      e.preventDefault();
+      playSound('click');
+      const owner = document.getElementById('card-owner').value.trim();
+      const num = document.getElementById('card-number').value.trim().toUpperCase();
+      const balance = parseInt(document.getElementById('card-balance').value) || 0;
+      const color = document.querySelector('input[name="card-color"]:checked').value;
+
+      if (cards.some(c => c.id === num)) {
+        alert('Karta s tímto číslem již existuje!');
+        return;
+      }
+
+      cards.push({
+        id: num,
+        owner,
+        balance,
+        color,
+        transactions: [
+          {
+            date: new Date().toLocaleDateString('cs-CZ') + ' ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }),
+            note: 'Založení nové karty',
+            amount: balance
+          }
+        ]
+      });
+
+      saveCards();
+      closeCardEditModal();
+      renderBankCards();
+      playSound('kaching');
+    }
+
+    function deleteCard(id) {
+      if (confirm('Opravdu smazat tuto kartu z Dětské banky?')) {
+        cards = cards.filter(c => c.id !== id);
+        saveCards();
+        renderBankCards();
+        playSound('beep');
+      }
+    }
+
+    function openCardTopupModal(cardId) {
+      playSound('click');
+      cardToTopup = cards.find(c => c.id === cardId);
+      if (!cardToTopup) return;
+
+      document.getElementById('topup-card-owner').innerText = cardToTopup.owner;
+      document.getElementById('topup-card-curr-balance').innerText = `${cardToTopup.balance} Kč`;
+      document.getElementById('topup-custom-amount').value = 100;
+      document.getElementById('modal-card-topup').classList.remove('hidden');
+    }
+
+    function closeCardTopupModal() {
+      document.getElementById('modal-card-topup').classList.add('hidden');
+    }
+
+    function addTopupValue(val) {
+      playSound('click');
+      document.getElementById('topup-custom-amount').value = val;
+    }
+
+    function executeTopup() {
+      if (!cardToTopup) return;
+      const amt = parseInt(document.getElementById('topup-custom-amount').value) || 0;
+      if (amt <= 0) {
+        alert('Zadej platnou částku.');
+        return;
+      }
+
+      cardToTopup.balance += amt;
+      cardToTopup.transactions.unshift({
+        date: new Date().toLocaleDateString('cs-CZ') + ' ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }),
+        note: 'Dobití kreditu (kapesné)',
+        amount: amt
+      });
+
+      saveCards();
+      closeCardTopupModal();
+      renderBankCards();
+      playSound('kaching');
+    }
+
+
+    /* =========================================================================
+       7. QR SCANNER (CAMERA) FOR PRODUCTS & PAYMENT CARDS
+       ========================================================================= */
+    let html5QrCode = null;
+    let isScannerStarting = false;
+
+    function openScannerModal(context = 'product') {
+      playSound('click');
+      scannerContext = context;
+      const modal = document.getElementById('modal-scanner');
+      const title = document.getElementById('scanner-modal-title');
+      const instr = document.getElementById('scanner-instruction-text');
+
+      if (context === 'card_payment') {
+        title.innerHTML = `<i data-lucide="credit-card" class="w-4 h-4 text-indigo-600"></i><span>Skenovat platební kartu</span>`;
+        instr.innerText = 'Namiř kameru na QR kód na zadní nebo přední straně dětské karty.';
+      } else {
+        title.innerHTML = `<i data-lucide="scan" class="w-4 h-4 text-blue-600"></i><span>Skenovat zboží</span>`;
+        instr.innerText = 'Namiř kameru na QR kód na štítku zboží.';
+      }
+
+      modal.classList.remove('hidden');
+      lucide.createIcons();
+
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("qr-reader");
+      }
+      
+      const config = { fps: 12, qrbox: { width: 200, height: 200 } };
+      isScannerStarting = true;
+
+      html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+        handleQrDetected(decodedText.trim());
+      }).catch(err => {
+        console.warn("Camera start failed: ", err);
+      }).finally(() => {
+        isScannerStarting = false;
+      });
+    }
+
+    function handleQrDetected(code) {
+      if (scannerContext === 'card_payment') {
+        closeScannerModal();
+        executeCardPayment(code);
+      } else {
+        const product = products.find(p => p.id.toUpperCase() === code.toUpperCase());
+        if (product) {
+          addToBasket(product.id);
+          closeScannerModal();
+        } else {
+          playSound('error');
+        }
+      }
+    }
+
+    async function closeScannerModal() {
+      document.getElementById('modal-scanner').classList.add('hidden');
+
+      if (html5QrCode) {
+        // If start is still resolving, wait briefly
+        if (isScannerStarting) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        try {
+          if (html5QrCode.isScanning) {
+            await html5QrCode.stop();
+          }
+          await html5QrCode.clear();
+        } catch (err) {
+          console.warn("Scanner stop cleanup note:", err);
+        } finally {
+          html5QrCode = null;
+          isScannerStarting = false;
+        }
+      }
+    }
+
+
+    /* =========================================================================
+       8. STOCK MANAGEMENT (CRUD)
+       ========================================================================= */
+    function renderStockList() {
+      const container = document.getElementById('stock-items-list');
+      container.innerHTML = products.map(p => `
+        <div class="flex items-center justify-between p-2.5 rounded-2xl bg-white border border-slate-200">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">${p.icon}</span>
+            <div>
+              <div class="font-bold text-xs text-slate-800 leading-tight">${p.name}</div>
+              <div class="text-[10px] text-slate-400 font-mono">${p.id} · <span class="text-emerald-600 font-bold">${p.price} Kč</span></div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${p.stock <= 2 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}">
+              ${p.stock} ks
+            </span>
+            <button onclick="openLabelModal('${p.id}')" title="Vytisknout štítek" class="p-1.5 bg-indigo-50 text-indigo-700 rounded-lg">
+              <i data-lucide="tag" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="deleteProduct('${p.id}')" title="Smazat" class="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function openProductModal() {
+      playSound('click');
+      document.getElementById('form-product').reset();
+      document.getElementById('prod-id').value = '';
+      const nextNum = products.length + 1;
+      document.getElementById('prod-sku').value = `PRD-${String(nextNum).padStart(3, '0')}`;
+      document.getElementById('modal-product').classList.remove('hidden');
+    }
+
+    function closeProductModal() {
+      document.getElementById('modal-product').classList.add('hidden');
+    }
+
+    function setEmoji(e) {
+      playSound('click');
+      document.getElementById('prod-icon').value = e;
+    }
+
+    function saveProduct(e) {
+      e.preventDefault();
+      playSound('click');
+      const sku = document.getElementById('prod-sku').value.trim().toUpperCase();
+      const name = document.getElementById('prod-name').value.trim();
+      const price = parseInt(document.getElementById('prod-price').value) || 0;
+      const stock = parseInt(document.getElementById('prod-stock').value) || 0;
+      const category = document.getElementById('prod-category').value;
+      const icon = document.getElementById('prod-icon').value.trim() || '📦';
+
+      if (products.some(p => p.id === sku)) {
+        alert('Tento kód (SKU) již existuje!');
+        return;
+      }
+
+      products.push({ id: sku, name, price, stock, category, icon });
+      saveProducts();
+      closeProductModal();
+      renderStockList();
+      renderPosGrid();
+      renderPosCategories();
+    }
+
+    function deleteProduct(id) {
+      if (confirm('Opravdu smazat toto zboží?')) {
+        products = products.filter(p => p.id !== id);
+        saveProducts();
+        renderStockList();
+        renderPosGrid();
+        playSound('beep');
+      }
+    }
+
+
+    /* =========================================================================
+       9. PRINTING PREVIEWS & TEMPLATES (CARDS, LABELS & RECEIPTS)
+       ========================================================================= */
+    function openCardPrintModal(cardId) {
+      playSound('click');
+      cardItemToPrint = cards.find(c => c.id === cardId);
+      if (!cardItemToPrint) return;
+
+      document.getElementById('card-print-owner').innerText = cardItemToPrint.owner;
+      document.getElementById('card-print-number').innerText = cardItemToPrint.id;
+
+      const qrContainer = document.getElementById('card-print-qr');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: cardItemToPrint.id,
+        width: 80,
+        height: 80,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      document.getElementById('modal-card-print').classList.remove('hidden');
+    }
+
+    function closeCardPrintModal() {
+      document.getElementById('modal-card-print').classList.add('hidden');
+    }
+
+    function openLabelModal(productId) {
+      playSound('click');
+      labelItemToPrint = products.find(p => p.id === productId);
+      if (!labelItemToPrint) return;
+
+      document.getElementById('label-emoji').innerText = labelItemToPrint.icon;
+      document.getElementById('label-name').innerText = labelItemToPrint.name;
+      document.getElementById('label-price').innerText = `${labelItemToPrint.price} Kč`;
+      document.getElementById('label-sku').innerText = labelItemToPrint.id;
+
+      const qrContainer = document.getElementById('label-qr');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: labelItemToPrint.id,
+        width: 80,
+        height: 80,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      document.getElementById('modal-label').classList.remove('hidden');
+    }
+
+    function closeLabelModal() {
+      document.getElementById('modal-label').classList.add('hidden');
+    }
+
+
+    /* =========================================================================
+       10. THERMAL PRINT ENGINE (Bluefy iOS BLE: X6 / Cat Printer + ESC/POS)
+       ========================================================================= */
+    let btDevice = null;
+    let btCharacteristic = null;
+    let btNotifyCharacteristic = null;
+    let btFlowPaused = false;
+    let printerProtocol = localStorage.getItem('kids_pos_printer_proto') || 'x6'; // 'x6' | 'x6_new' | 'escpos'
+    let printerEnergy = parseInt(localStorage.getItem('kids_pos_printer_energy') || '18000', 10);
+    let isPrintingNow = false;
+    let toastTimer = null;
+
+    function btLog(msg) {
+      const el = document.getElementById('bt-debug-log');
+      const time = new Date().toLocaleTimeString('cs-CZ', { hour12: false });
+      console.log('[BT]', msg);
+      if (el) {
+        if (el.innerText.startsWith('Připraveno.')) el.innerText = '';
+        el.innerText += `[${time}] ${msg}\n`;
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+
+    function clearBtLog() {
+      const el = document.getElementById('bt-debug-log');
+      if (el) el.innerText = 'Log vymazán.\n';
+    }
+
+    function copyBtLog() {
+      const el = document.getElementById('bt-debug-log');
+      if (!el) return;
+      const ta = document.createElement('textarea');
+      ta.value = el.innerText;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('Diagnostika zkopírována');
+      } catch (e) {
+        showToast('Nepodařilo se zkopírovat');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function showToast(msg, duration = 2600) {
+      const el = document.getElementById('app-toast');
+      if (!el) return;
+      el.innerText = msg;
+      el.classList.remove('hidden');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.add('hidden'), duration);
+    }
+
+    function setPrinterProtocol(proto) {
+      printerProtocol = proto;
+      localStorage.setItem('kids_pos_printer_proto', proto);
+      const labels = {
+        x6: 'X6 (51 78)',
+        x6_new: 'X6 novější (22 21)',
+        x6_12: 'X6 prefix (12 51 78)',
+        escpos: 'ESC/POS 58mm'
+      };
+      btLog('Protokol přepnut na: ' + (labels[proto] || proto));
+      showToast('Režim tiskárny: ' + (labels[proto] || proto));
+    }
+
+    function setPrinterEnergy(val) {
+      printerEnergy = parseInt(val, 10) || 18000;
+      localStorage.setItem('kids_pos_printer_energy', String(printerEnergy));
+      showToast('Sytost tisku uložena');
+    }
+
+    function updatePrintProgress(visible, pct = 0, label = 'Tisknu na X6...') {
+      const wrap = document.getElementById('print-progress-wrap');
+      const bar = document.getElementById('print-progress-bar');
+      const pctEl = document.getElementById('print-progress-pct');
+      const lblEl = document.getElementById('print-progress-label');
+      if (!wrap) return;
+      if (!visible) {
+        wrap.classList.add('hidden');
+        return;
+      }
+      wrap.classList.remove('hidden');
+      bar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+      pctEl.innerText = `${Math.round(pct)} %`;
+      lblEl.innerText = label;
+    }
+
+    // BLE služby: X6 / X6h / MX06 / GB01 (AE30, AE00, AF30) + běžné ESC/POS
+    const X6_SERVICE_UUIDS = [
+      '0000ae30-0000-1000-8000-00805f9b34fb',
+      '0000ae00-0000-1000-8000-00805f9b34fb',
+      '0000af30-0000-1000-8000-00805f9b34fb'
+    ];
+    const X6_WRITE_CHAR_UUIDS = [
+      '0000ae01-0000-1000-8000-00805f9b34fb',
+      '0000ae03-0000-1000-8000-00805f9b34fb',
+      '0000af01-0000-1000-8000-00805f9b34fb'
+    ];
+    const X6_NOTIFY_CHAR_UUIDS = [
+      '0000ae02-0000-1000-8000-00805f9b34fb',
+      '0000af02-0000-1000-8000-00805f9b34fb'
+    ];
+
+    const POS_SERVICES = [
+      ...X6_SERVICE_UUIDS,
+      '000018f0-0000-1000-8000-00805f9b34fb',
+      'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+      '0000ff00-0000-1000-8000-00805f9b34fb',
+      '0000ffe0-0000-1000-8000-00805f9b34fb',
+      '0000fee7-0000-1000-8000-00805f9b34fb'
+    ];
+
+    function shortUuid(uuid) {
+      if (!uuid) return '?';
+      const u = String(uuid).toLowerCase();
+      if (u.length === 4) return u.toUpperCase();
+      if (u.length >= 8 && u.startsWith('0000')) return u.slice(4, 8).toUpperCase();
+      return u.slice(0, 8).toUpperCase();
+    }
+
+    function withTimeout(promise, ms, label = 'Timeout') {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))
+      ]);
+    }
+
+    async function attachX6FlowControl(service) {
+      btNotifyCharacteristic = null;
+      btFlowPaused = false;
+      try {
+        const chars = await withTimeout(service.getCharacteristics(), 1500, 'chars timeout');
+        for (const nc of chars) {
+          const su = shortUuid(nc.uuid);
+          if ((su === 'AE02' || su === 'AF02') && nc.properties && nc.properties.notify) {
+            await withTimeout(nc.startNotifications(), 1500, 'notify timeout');
+            nc.addEventListener('characteristicvaluechanged', (ev) => {
+              const v = new Uint8Array(ev.target.value.buffer);
+              if (v.length >= 7 && v[2] === 0xAE) {
+                if (v[6] === 0x10) {
+                  btFlowPaused = true;
+                  btLog('Buffer X6 plný -> pauza');
+                } else if (v[6] === 0x00) {
+                  btFlowPaused = false;
+                  btLog('Buffer X6 volný -> pokračuji');
+                }
+              }
+            });
+            btNotifyCharacteristic = nc;
+            btLog('Flow control aktivní: ' + su);
+            return;
+          }
+        }
+      } catch (e) {
+        btLog('Flow control přeskočen (' + (e.message || e) + ')');
+      }
+    }
+
+    async function toggleBluetoothConnection() {
+      if (!navigator.bluetooth) {
+        btLog('CHYBA: Web Bluetooth není dostupný (použij Bluefy).');
+        showToast('Web Bluetooth není dostupný. Otevři stránku v aplikaci Bluefy na iPhonu.', 4000);
+        return false;
+      }
+
+      if (btDevice && btDevice.gatt && btDevice.gatt.connected && btCharacteristic) {
+        btDevice.gatt.disconnect();
+        btCharacteristic = null;
+        btNotifyCharacteristic = null;
+        setBtStatus(false);
+        btLog('Odpojeno uživatelem.');
+        showToast('Tiskárna odpojena');
+        return false;
+      }
+
+      try {
+        btLog('Hledám Bluetooth zařízení...');
+        btDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: POS_SERVICES
+        });
+
+        btDevice.addEventListener('gattserverdisconnected', () => {
+          btCharacteristic = null;
+          btNotifyCharacteristic = null;
+          btFlowPaused = false;
+          setBtStatus(false);
+          btLog('Spojení s tiskárnou přerušeno.');
+        });
+
+        btLog('Vybráno: ' + (btDevice.name || 'Neznámé zařízení'));
+        showToast('Připojuji k ' + (btDevice.name || 'tiskárně') + '...');
+        const server = await withTimeout(btDevice.gatt.connect(), 8000, 'GATT connect timeout');
+        btCharacteristic = null;
+        preferWriteWithResponse = false;
+        let detectedX6 = false;
+        let matchedService = null;
+
+        // 1) Nejdříve zkusíme načíst všechny služby najednou (v Bluefy nejspolehlivější)
+        let services = [];
+        if (typeof server.getPrimaryServices === 'function') {
+          try {
+            services = await withTimeout(server.getPrimaryServices(), 4000, 'getPrimaryServices timeout');
+            btLog('Služby: ' + services.map(s => shortUuid(s.uuid)).join(', '));
+          } catch (e) {
+            btLog('getPrimaryServices selhalo: ' + (e.message || e));
+          }
+        }
+
+        // 2) Pokud getPrimaryServices nic nevrátilo, zkusíme známé UUID jednotlivě
+        if (services.length === 0) {
+          for (const sUuid of POS_SERVICES) {
+            try {
+              const s = await withTimeout(server.getPrimaryService(sUuid), 1500, 'svc timeout');
+              if (s) services.push(s);
+            } catch (e) {}
+          }
+        }
+
+        // Seřadíme služby tak, aby AE30 / AE00 / AF30 byly na prvním místě
+        services.sort((a, b) => {
+          const sa = shortUuid(a.uuid);
+          const sb = shortUuid(b.uuid);
+          const pa = (sa === 'AE30' || sa === 'AE00' || sa === 'AF30') ? 0 : 1;
+          const pb = (sb === 'AE30' || sb === 'AE00' || sb === 'AF30') ? 0 : 1;
+          return pa - pb;
+        });
+
+        for (const service of services) {
+          const sShort = shortUuid(service.uuid);
+          let chars = [];
+          try {
+            chars = await withTimeout(service.getCharacteristics(), 2000, 'chars timeout');
+          } catch (e) {
+            continue;
+          }
+
+          btLog(`  ${sShort}: ` + chars.map(c => `${shortUuid(c.uuid)}(${c.properties.writeWithoutResponse ? 'WNR' : ''}${c.properties.write ? 'W' : ''}${c.properties.notify ? 'N' : ''})`).join(' '));
+
+          // Přednostně hledáme AE01 / AE03 / AF01
+          let picked = chars.find(c => ['AE01', 'AE03', 'AF01'].includes(shortUuid(c.uuid)) && (c.properties.writeWithoutResponse || c.properties.write));
+          if (!picked) {
+            picked = chars.find(c => c.properties.writeWithoutResponse || c.properties.write);
+          }
+
+          if (picked) {
+            btCharacteristic = picked;
+            matchedService = service;
+            if (['AE30', 'AE00', 'AF30'].includes(sShort) || ['AE01', 'AE03', 'AF01'].includes(shortUuid(picked.uuid))) {
+              detectedX6 = true;
+            }
+            break;
+          }
+        }
+
+        if (!btCharacteristic) {
+          btLog('CHYBA: Nenašel se žádný zapisovatelný BLE kanál.');
+          showToast('Tiskárna připojena, ale nenašel se kanál pro zápis (AE01).', 4000);
+          setBtStatus(false);
+          return false;
+        }
+
+        btLog(`Vybrán kanál: svc=${shortUuid(matchedService.uuid)} chr=${shortUuid(btCharacteristic.uuid)}`);
+
+        if (detectedX6 && matchedService) {
+          await attachX6FlowControl(matchedService);
+        }
+
+        const devName = (btDevice.name || '').toUpperCase();
+        if (printerProtocol === 'escpos' && (detectedX6 || /^(X5|X6|X7|X15|X18|MX|GB0|GT0|YHK)/.test(devName))) {
+          printerProtocol = 'x6';
+          localStorage.setItem('kids_pos_printer_proto', 'x6');
+          const sel = document.getElementById('printer-protocol');
+          if (sel) sel.value = 'x6';
+        }
+
+        setBtStatus(true, btDevice.name || 'X6 Tiskárna');
+        showToast(`Připojeno: ${btDevice.name || 'X6'} (${printerProtocol.toUpperCase()})`);
+        playSound('kaching');
+        return true;
+      } catch (err) {
+        btLog('CHYBA připojení: ' + (err.message || err));
+        console.warn('Bluetooth connection failed: ', err);
+        showToast('Nepodařilo se připojit: ' + (err.message || err), 3500);
+        setBtStatus(false);
+        return false;
+      }
+    }
+
+    async function ensurePrinterReady() {
+      if (btCharacteristic && btDevice && btDevice.gatt && btDevice.gatt.connected) {
+        return true;
+      }
+      if (navigator.bluetooth) {
+        btLog('Tiskárna není připojená -> spouštím připojení...');
+        showToast('Připojuji tiskárnu v Bluefy...');
+        return await toggleBluetoothConnection();
+      }
+      return false;
+    }
+
+    function setBtStatus(connected, name = '') {
+      const text = document.getElementById('bt-status-text');
+      const dot = document.getElementById('bt-dot');
+      const badge = document.getElementById('printer-panel-badge');
+      if (connected) {
+        text.innerText = printerProtocol.startsWith('x6') ? 'X6 OK' : 'BT OK';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        if (badge) {
+          badge.innerText = name || 'Připojeno';
+          badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
+        }
+      } else {
+        text.innerText = 'Tisk';
+        dot.className = 'w-2 h-2 rounded-full bg-slate-400';
+        if (badge) {
+          badge.innerText = 'Nepřipojeno';
+          badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500';
+        }
+      }
+    }
+
+    /* -------------------------------------------------------------------------
+       X6 / CAT PRINTER (0x51 0x78 i 0x22 0x21) — 384 px, LSB-first, CRC-8 (0x07)
+       ------------------------------------------------------------------------- */
+    function calcCrc8(data) {
+      let crc = 0;
+      for (let i = 0; i < data.length; i++) {
+        crc ^= data[i];
+        for (let j = 0; j < 8; j++) {
+          crc = (crc & 0x80) ? (((crc << 1) ^ 0x07) & 0xFF) : ((crc << 1) & 0xFF);
+        }
+      }
+      return crc;
+    }
+
+    function makeX6Packet(cmd, payload) {
+      const len = payload.length;
+      const isPrefix12 = printerProtocol === 'x6_12';
+      const offset = isPrefix12 ? 1 : 0;
+      const packet = new Uint8Array(offset + 6 + len + 2);
+      if (isPrefix12) {
+        packet[0] = 0x12;
+      }
+      if (printerProtocol === 'x6_new') {
+        packet[offset + 0] = 0x22;
+        packet[offset + 1] = 0x21;
+      } else {
+        packet[offset + 0] = 0x51;
+        packet[offset + 1] = 0x78;
+      }
+      packet[offset + 2] = cmd;
+      packet[offset + 3] = 0x00;
+      packet[offset + 4] = len & 0xFF;
+      packet[offset + 5] = (len >> 8) & 0xFF;
+      packet.set(payload, offset + 6);
+      packet[offset + 6 + len] = calcCrc8(payload);
+      packet[offset + 7 + len] = 0xFF;
+      return packet;
+    }
+
+    const X6_LATTICE_START = [0xAA, 0x55, 0x17, 0x38, 0x44, 0x5F, 0x5F, 0x5F, 0x44, 0x38, 0x2C];
+    const X6_LATTICE_END   = [0xAA, 0x55, 0x17, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17];
+
+    /* Odeslání bajtů po 20B BLE blocích s automatickým fallbackem pro Bluefy iOS */
+    let preferWriteWithResponse = false;
+
+    async function writeBleBytes(bytes, chunkSize = 20, delayMs = 12) {
+      if (!btCharacteristic) return false;
+
+      let waitCount = 0;
+      while (btFlowPaused && waitCount < 60) {
+        await new Promise(r => setTimeout(r, 50));
+        waitCount++;
+      }
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        const canNoResp = !preferWriteWithResponse && btCharacteristic.properties && btCharacteristic.properties.writeWithoutResponse && typeof btCharacteristic.writeValueWithoutResponse === 'function';
+
+        if (canNoResp) {
+          try {
+            await withTimeout(btCharacteristic.writeValueWithoutResponse(chunk), 3000, 'WNR timeout');
+          } catch (err) {
+            btLog('Přepínám na writeValue(): ' + (err.message || err));
+            preferWriteWithResponse = true;
+            await withTimeout(btCharacteristic.writeValue(chunk), 3000, 'W timeout');
+          }
+        } else {
+          await withTimeout(btCharacteristic.writeValue(chunk), 3000, 'W timeout');
+        }
+
+        if (delayMs > 0) {
+          await new Promise(r => setTimeout(r, delayMs));
+        }
+      }
+      return true;
+    }
+
+    /* Převod 384px Canvasu a přímý tisk na X6 Mini Printer */
+    async function sendCanvasToX6(canvas) {
+      if (!btCharacteristic) return false;
+      if (isPrintingNow) {
+        showToast('Počkej, tiskárna právě tiskne...');
+        return false;
+      }
+
+      isPrintingNow = true;
+      btFlowPaused = false;
+      updatePrintProgress(true, 0, 'Příprava tisku X6...');
+      btLog(`Start tisku (${printerProtocol}, ${canvas.width}x${canvas.height}, sytost ${printerEnergy})`);
+
+      try {
+        const width = 384;
+        const widthBytes = 48; // 384 / 8
+
+        // Zajistíme přesnou šířku 384 px
+        let srcCanvas = canvas;
+        if (canvas.width !== width) {
+          srcCanvas = document.createElement('canvas');
+          srcCanvas.width = width;
+          srcCanvas.height = Math.round(canvas.height * (width / canvas.width));
+          const sctx = srcCanvas.getContext('2d');
+          sctx.fillStyle = '#ffffff';
+          sctx.fillRect(0, 0, srcCanvas.width, srcCanvas.height);
+          sctx.drawImage(canvas, 0, 0, srcCanvas.width, srcCanvas.height);
+        }
+
+        const h = srcCanvas.height;
+        const ctx = srcCanvas.getContext('2d');
+        const imgData = ctx.getImageData(0, 0, width, h).data;
+
+        // 1. Inicializační sekvence X6
+        const energyLo = printerEnergy & 0xFF;
+        const energyHi = (printerEnergy >> 8) & 0xFF;
+
+        await writeBleBytes(makeX6Packet(0xA4, [0x33]), 20, 20);               // Kvalita tisku (0x33 = standard X6)
+        await writeBleBytes(makeX6Packet(0xAF, [energyLo, energyHi]), 20, 20); // Sytost (energie hlavy)
+        await writeBleBytes(makeX6Packet(0xBE, [0x00]), 20, 20);               // Režim: 0x00 = grafika
+        await writeBleBytes(makeX6Packet(0xBD, [0x19]), 20, 20);               // Rychlost posuvu (25)
+        await writeBleBytes(makeX6Packet(0xA6, X6_LATTICE_START), 20, 25);     // Start mřížky
+
+        // První řádek čistě bílý (vyžadují některé revize X6h proti artefaktům)
+        const rowBuf = new Uint8Array(widthBytes);
+        await writeBleBytes(makeX6Packet(0xA2, rowBuf), 20, 12);
+
+        // 2. Odesílání obrazových řádků (0xA2, 48 bajtů, LSB-first)
+        for (let y = 0; y < h; y++) {
+          rowBuf.fill(0);
+          for (let xb = 0; xb < widthBytes; xb++) {
+            let byte = 0;
+            for (let bit = 0; bit < 8; bit++) {
+              const x = xb * 8 + bit;
+              const idx = (y * width + x) * 4;
+              const lum = 0.299 * imgData[idx] + 0.587 * imgData[idx + 1] + 0.114 * imgData[idx + 2];
+              if (imgData[idx + 3] > 128 && lum < 165) {
+                byte |= (1 << bit); // LSB-first pro X6
+              }
+            }
+            rowBuf[xb] = byte;
+          }
+
+          const linePkt = makeX6Packet(0xA2, rowBuf);
+          await writeBleBytes(linePkt, 20, 10);
+
+          if (y % 12 === 0 || y === h - 1) {
+            updatePrintProgress(true, ((y + 1) / h) * 100, `Tisknu na X6 (${y + 1}/${h} řádků)`);
+          }
+        }
+
+        // 3. Posun papíru za odtrhávací hranu + ukončení tisku
+        await writeBleBytes(makeX6Packet(0xA1, [0x68, 0x00]), 20, 25);   // Posun 104 px
+        await writeBleBytes(makeX6Packet(0xA6, X6_LATTICE_END), 20, 25); // Konec tisku
+
+        btLog('Tisk dokončen OK.');
+        showToast('Vytištěno na X6!');
+        return true;
+      } catch (e) {
+        btLog('CHYBA tisku: ' + (e.message || e));
+        console.error('X6 Print Error:', e);
+        showToast('Chyba tisku X6: ' + (e.message || e), 4000);
+        return false;
+      } finally {
+        isPrintingNow = false;
+        setTimeout(() => updatePrintProgress(false), 1200);
+      }
+    }
+
+    async function feedX6Paper() {
+      if (!btCharacteristic) {
+        showToast('Nejprve připoj tiskárnu X6.');
+        return;
+      }
+      playSound('click');
+      btLog('Posílám příkaz Posun (' + printerProtocol + ')...');
+      try {
+        if (printerProtocol.startsWith('x6')) {
+          await writeBleBytes(makeX6Packet(0xA6, X6_LATTICE_START), 20, 20);
+          await writeBleBytes(makeX6Packet(0xA1, [0x50, 0x00]), 20, 25);
+          await writeBleBytes(makeX6Packet(0xA6, X6_LATTICE_END), 20, 20);
+        } else {
+          await writeBleBytes(new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]), 64, 15);
+        }
+        btLog('Posun odeslán.');
+        showToast('Papír posunut');
+      } catch (e) {
+        btLog('CHYBA posuvu: ' + (e.message || e));
+        showToast('Chyba posuvu: ' + (e.message || e));
+      }
+    }
+
+    async function printX6TestPage() {
+      if (!btCharacteristic) {
+        showToast('Nejprve připoj tiskárnu X6.');
+        return;
+      }
+      playSound('beep');
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 384;
+      canvas.height = 170;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 384, 170);
+
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(8, 8, 368, 154);
+
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('TEST TISKU X6', 192, 52);
+
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('Dětská Pokladna & Banka', 192, 88);
+
+      ctx.font = '15px monospace';
+      ctx.fillText(`Protokol: ${printerProtocol.toUpperCase()} | Sytost: ${printerEnergy}`, 192, 120);
+      ctx.fillText('Příliš žluťoučký kůň :)', 192, 146);
+
+      await printCanvasToBluetooth(canvas);
+    }
+
+    /* Převod Canvasu (384 px) do ESC/POS rastru GS v 0 (MSB-first) */
+    function canvasToEscPosRaster(canvas) {
+      const width = 384;
+      const widthBytes = 48; // 384 / 8
+
+      let srcCanvas = canvas;
+      if (canvas.width !== width) {
+        srcCanvas = document.createElement('canvas');
+        srcCanvas.width = width;
+        srcCanvas.height = Math.round(canvas.height * (width / canvas.width));
+        const sctx = srcCanvas.getContext('2d');
+        sctx.fillStyle = '#ffffff';
+        sctx.fillRect(0, 0, srcCanvas.width, srcCanvas.height);
+        sctx.drawImage(canvas, 0, 0, srcCanvas.width, srcCanvas.height);
+      }
+
+      const h = srcCanvas.height;
+      const ctx = srcCanvas.getContext('2d');
+      const imgData = ctx.getImageData(0, 0, width, h).data;
+
+      const init = [0x1B, 0x40]; // ESC @
+      const alignCenter = [0x1B, 0x61, 0x01]; // ESC a 1
+      const header = [
+        0x1D, 0x76, 0x30, 0x00,
+        widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
+        h & 0xFF, (h >> 8) & 0xFF
+      ];
+      const feed = [0x0A, 0x0A, 0x0A, 0x0A];
+
+      const bitmap = new Uint8Array(widthBytes * h);
+      for (let y = 0; y < h; y++) {
+        for (let xb = 0; xb < widthBytes; xb++) {
+          let byte = 0;
+          for (let bit = 0; bit < 8; bit++) {
+            const x = xb * 8 + bit;
+            const idx = (y * width + x) * 4;
+            const lum = 0.299 * imgData[idx] + 0.587 * imgData[idx + 1] + 0.114 * imgData[idx + 2];
+            if (imgData[idx + 3] > 128 && lum < 165) {
+              byte |= (0x80 >> bit); // MSB-first pro ESC/POS
+            }
+          }
+          bitmap[y * widthBytes + xb] = byte;
+        }
+      }
+
+      const out = new Uint8Array(init.length + alignCenter.length + header.length + bitmap.length + feed.length);
+      let offset = 0;
+      out.set(init, offset); offset += init.length;
+      out.set(alignCenter, offset); offset += alignCenter.length;
+      out.set(header, offset); offset += header.length;
+      out.set(bitmap, offset); offset += bitmap.length;
+      out.set(feed, offset);
+      return out;
+    }
+
+    /* Jednotný rozcestník pro tisk Canvasu na připojenou BT tiskárnu (X6 nebo ESC/POS) */
+    async function printCanvasToBluetooth(canvas) {
+      if (!btCharacteristic) return false;
+      if (printerProtocol.startsWith('x6')) {
+        return await sendCanvasToX6(canvas);
+      } else {
+        const rasterBytes = canvasToEscPosRaster(canvas);
+        return await writeBleBytes(rasterBytes, 64, 18);
+      }
+    }
+
+    /* Vykreslení účtenky do 384px Canvasu (plná čeština pro X6 i ESC/POS) */
+    function renderReceiptCanvas(sale) {
+      const lineHeight = 28;
+      const baseHeight = 260 + sale.items.length * lineHeight + (sale.paymentType === 'card' ? 56 : 56);
+      const canvas = document.createElement('canvas');
+      canvas.width = 384;
+      canvas.height = baseHeight;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#000000';
+
+      let y = 34;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('DĚTSKÝ OBCHŮDEK', 192, y);
+      y += 26;
+
+      ctx.font = 'bold 16px monospace';
+      ctx.fillText(`Účtenka #${sale.receiptNo}`, 192, y);
+      y += 22;
+      ctx.font = '15px monospace';
+      ctx.fillText(sale.date, 192, y);
+      y += 18;
+
+      // Přerušovaná čára
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 2;
+      ctx.moveTo(10, y);
+      ctx.lineTo(374, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      y += 28;
+
+      // Položky nákupu
+      sale.items.forEach(it => {
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillText(`${it.quantity}x ${it.product.name.slice(0, 18)}`, 12, y);
+
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 17px monospace';
+        ctx.fillText(`${it.quantity * it.product.price} Kč`, 372, y);
+        y += lineHeight;
+      });
+
+      y += 4;
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.moveTo(10, y);
+      ctx.lineTo(374, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      y += 32;
+
+      // Celkem
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText('CELKEM:', 12, y);
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 26px monospace';
+      ctx.fillText(`${sale.totalPrice} Kč`, 372, y);
+      y += 30;
+
+      // Detail platby
+      ctx.textAlign = 'left';
+      ctx.font = '16px sans-serif';
+      if (sale.paymentType === 'card') {
+        ctx.fillText(`Platba kartou: ${sale.cardOwner}`, 12, y);
+        y += 24;
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText(`Zůstatek na kartě: ${sale.remainingBalance} Kč`, 12, y);
+      } else {
+        ctx.fillText(`Přijato hotově: ${sale.cashGiven} Kč`, 12, y);
+        y += 24;
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText(`Vráceno: ${sale.changeToReturn} Kč`, 12, y);
+      }
+
+      y += 38;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('Děkujeme za tvůj nákup! :)', 192, y);
+
+      return canvas;
+    }
+
+    /* Pomocné vykreslení QR kódu do Canvasu pro rastrový tisk */
+    function createQrCanvas(text, size = 180) {
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'fixed';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+
+      new QRCode(tempDiv, {
+        text: text,
+        width: size,
+        height: size,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      const qrCanvas = tempDiv.querySelector('canvas');
+      const out = document.createElement('canvas');
+      out.width = size;
+      out.height = size;
+      const ctx = out.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      if (qrCanvas) {
+        ctx.drawImage(qrCanvas, 0, 0, size, size);
+      }
+      document.body.removeChild(tempDiv);
+      return out;
+    }
+
+    /* Print receipt */
+    async function executeReceiptPrint() {
+      if (!currentLastSale) return;
+      playSound('beep');
+
+      if (await ensurePrinterReady()) {
+        const receiptCanvas = renderReceiptCanvas(currentLastSale);
+        const ok = await printCanvasToBluetooth(receiptCanvas);
+        if (ok) {
+          closeSuccessModal();
+          return;
+        }
+      } else if (navigator.bluetooth) {
+        return; // V Bluefy neděláme nefunkční window.print()
+      }
+
+      // System Fallback Print
+      const area = document.getElementById('printable-receipt-area');
+      area.innerHTML = `
+        <div style="text-align: center;">
+          <h2 style="margin: 0; font-size: 13px; font-weight: bold;">🛒 DĚTSKÝ OBCHŮDEK</h2>
+          <p style="margin: 2px 0; font-size: 10px;">Účtenka č. ${currentLastSale.receiptNo}</p>
+          <p style="margin: 2px 0; font-size: 9px;">${currentLastSale.date}</p>
+          <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+          <table style="width: 100%; font-size: 10px; border-collapse: collapse;">
+            ${currentLastSale.items.map(it => `
+              <tr>
+                <td style="text-align: left;">${it.product.name}</td>
+                <td style="text-align: center;">${it.quantity}x</td>
+                <td style="text-align: right;">${it.quantity * it.product.price} Kč</td>
+              </tr>
+            `).join('')}
+          </table>
+          <div style="border-top: 1px dashed #000; margin: 4px 0;"></div>
+          <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11px;">
+            <span>CELKEM:</span>
+            <span>${currentLastSale.totalPrice} Kč</span>
+          </div>
+          ${currentLastSale.paymentType === 'card' ? `
+            <div style="font-size: 9px; margin-top: 2px; text-align: right;">
+              <div>Placeno kartou: ${currentLastSale.cardOwner}</div>
+              <div>Zůstatek na kartě: ${currentLastSale.remainingBalance} Kč</div>
+            </div>
+          ` : `
+            <div style="font-size: 9px; margin-top: 2px; text-align: right;">
+              <div>Hotovost: ${currentLastSale.cashGiven} Kč</div>
+              <div>Vráceno: ${currentLastSale.changeToReturn} Kč</div>
+            </div>
+          `}
+          <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+          <p style="font-size: 9px; margin: 2px 0;">Děkujeme za tvůj nákup!</p>
+        </div>
+      `;
+      window.print();
+      closeSuccessModal();
+    }
+
+    /* Print plastic card sticker (with QR Raster via Bluetooth X6/ESC-POS or Fallback) */
+    async function executeCardPrint() {
+      if (!cardItemToPrint) return;
+      playSound('beep');
+
+      if (await ensurePrinterReady()) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 384;
+        canvas.height = 310;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 384, 310);
+
+        // Rámeček karty
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(8, 8, 368, 294);
+
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('DĚTSKÁ NÁRODNÍ BANKA', 192, 38);
+
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('PLATEBNÍ KARTA', 192, 60);
+
+        // QR kód karty
+        const qrCanvas = createQrCanvas(cardItemToPrint.id, 160);
+        ctx.drawImage(qrCanvas, (384 - 160) / 2, 72);
+
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(cardItemToPrint.owner.toUpperCase(), 192, 262);
+
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText(cardItemToPrint.id, 192, 288);
+
+        const ok = await printCanvasToBluetooth(canvas);
+        if (ok) {
+          closeCardPrintModal();
+          return;
+        }
+      } else if (navigator.bluetooth) {
+        return;
+      }
+
+      // Fallback
+      const qrCanvas = document.querySelector('#card-print-qr canvas');
+      const qrImg = qrCanvas ? qrCanvas.toDataURL() : '';
+      const area = document.getElementById('printable-receipt-area');
+      area.innerHTML = `
+        <div style="text-align: center; border: 2px solid #000; padding: 6px; border-radius: 6px;">
+          <div style="font-size: 9px; font-weight: bold; letter-spacing: 1px;">DĚTSKÁ NÁRODNÍ BANKA</div>
+          <div style="font-size: 8px; margin-bottom: 4px;">PLATEBNÍ KARTA S QR KÓDEM</div>
+          ${qrImg ? `<img src="${qrImg}" style="width: 80px; height: 80px; margin: 2px auto; display: block;" />` : ''}
+          <div style="font-size: 12px; font-weight: bold; margin-top: 4px;">${cardItemToPrint.owner}</div>
+          <div style="font-size: 10px; font-family: monospace;">${cardItemToPrint.id}</div>
+        </div>
+      `;
+      window.print();
+      closeCardPrintModal();
+    }
+
+    /* Print product label (with QR Raster via Bluetooth X6/ESC-POS or Fallback) */
+    async function executeLabelPrint() {
+      if (!labelItemToPrint) return;
+      playSound('beep');
+
+      if (await ensurePrinterReady()) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 384;
+        canvas.height = 310;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 384, 310);
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        ctx.strokeRect(8, 8, 368, 294);
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText(labelItemToPrint.name.slice(0, 22), 192, 42);
+
+        ctx.font = 'bold 34px monospace';
+        ctx.fillText(`${labelItemToPrint.price} Kč`, 192, 82);
+
+        // QR kód položky
+        const qrCanvas = createQrCanvas(labelItemToPrint.id, 165);
+        ctx.drawImage(qrCanvas, (384 - 165) / 2, 95);
+
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText(labelItemToPrint.id, 192, 286);
+
+        const ok = await printCanvasToBluetooth(canvas);
+        if (ok) {
+          closeLabelModal();
+          return;
+        }
+      } else if (navigator.bluetooth) {
+        return;
+      }
+
+      const qrCanvas = document.querySelector('#label-qr canvas');
+      const qrImg = qrCanvas ? qrCanvas.toDataURL() : '';
+      const area = document.getElementById('printable-receipt-area');
+
+      area.innerHTML = `
+        <div style="text-align: center; border: 1px dashed #000; padding: 4px;">
+          <div style="font-size: 18px;">${labelItemToPrint.icon}</div>
+          <div style="font-size: 11px; font-weight: bold;">${labelItemToPrint.name}</div>
+          <div style="font-size: 14px; font-weight: 900; margin: 2px 0;">${labelItemToPrint.price} Kč</div>
+          ${qrImg ? `<img src="${qrImg}" style="width: 75px; height: 75px; margin: 2px auto; display: block;" />` : ''}
+          <div style="font-size: 8px; font-family: monospace;">${labelItemToPrint.id}</div>
+        </div>
+      `;
+      window.print();
+      closeLabelModal();
+    }
+
+    /* Print game banknotes (Raster via Bluetooth X6/ESC-POS or Fallback) */
+    async function printMoney(val) {
+      playSound('kaching');
+
+      if (await ensurePrinterReady()) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 384;
+        canvas.height = 190;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 384, 190);
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(10, 10, 364, 170);
+
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('DĚTSKÁ NÁRODNÍ BANKA', 192, 42);
+
+        ctx.font = 'bold 56px monospace';
+        ctx.fillText(`${val} Kč`, 192, 112);
+
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillText('HERNÍ PLATIDLO PRO DĚTI', 192, 155);
+
+        const ok = await printCanvasToBluetooth(canvas);
+        if (ok) return;
+      } else if (navigator.bluetooth) {
+        return;
+      }
+
+      const area = document.getElementById('printable-receipt-area');
+      area.innerHTML = `
+        <div style="text-align: center; border: 2px solid #000; padding: 6px; border-radius: 6px;">
+          <div style="font-size: 8px; text-transform: uppercase; letter-spacing: 1px;">Dětská Národní Banka</div>
+          <div style="font-size: 24px; font-weight: 900; margin: 3px 0; font-family: monospace;">${val} Kč</div>
+          <div style="font-size: 9px; font-weight: bold;">Herní platidlo pro děti</div>
+        </div>
+      `;
+      window.print();
+    }
+
+
+    /* =========================================================================
+       11. BOOTSTRAP ON LOAD
+       ========================================================================= */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      const protoSel = document.getElementById('printer-protocol');
+      if (protoSel) protoSel.value = printerProtocol;
+      const energySel = document.getElementById('printer-energy');
+      if (energySel) energySel.value = String(printerEnergy);
+      renderPosCategories();
+      renderPosGrid();
+      updateBasketHeader();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
