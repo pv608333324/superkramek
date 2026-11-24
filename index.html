@@ -996,8 +996,8 @@
 
     /* =========================================================================
        3. NAVIGATION TABS (IPHONE 8 OPTIMIZED)
-    /* Přesný posun etikety v milimetrech (např. 12 mm = 96 px při 8 px/mm) */
-    async function feedLabelAlign(mm = 12) {
+       ========================================================================= */
+    function switchView(viewName) {
       playSound('click');
       const tabs = ['pos', 'bank', 'stock', 'more'];
       tabs.forEach(v => {
@@ -2484,8 +2484,8 @@
       }
     }
 
-    /* Přesný posun etikety v milimetrech (např. 20 mm = 160 px při 8 px/mm) */
-    async function feedLabelAlign(mm = 20) {
+    /* Přesný posun etikety v milimetrech (např. 12 mm = 96 px při 8 px/mm) */
+    async function feedLabelAlign(mm = 12) {
       playSound('click');
       if (!(await ensurePrinterReady())) {
         showToast('Nejprve připoj tiskárnu.');
