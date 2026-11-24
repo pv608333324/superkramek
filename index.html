@@ -1094,25 +1094,6 @@
       }
     }
 
-    function saveProducts() {
-      localStorage.setItem('kids_pos_products', JSON.stringify(products));
-    }
-
-    function saveCards() {
-      localStorage.setItem('kids_pos_cards', JSON.stringify(cards));
-    }
-
-    function resetDefaultProducts() {
-      if (confirm('Obnovit původní vzorové produkty?')) {
-        products = JSON.parse(JSON.stringify(DEFAULT_PRODUCTS));
-        saveProducts();
-        renderPosCategories();
-        renderPosGrid();
-        renderStockList();
-        playSound('kaching');
-      }
-    }
-
 
     /* =========================================================================
        3. NAVIGATION TABS (IPHONE 8 OPTIMIZED)
@@ -1944,11 +1925,21 @@
     /* =========================================================================
        8. STOCK MANAGEMENT (CRUD, CATEGORIES & RESTOCK)
        ========================================================================= */
-    function renderCategorySelect() {
+    function escapeHtmlAttr(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderCategorySelect(selectedCat = '') {
       const sel = document.getElementById('prod-category');
       if (!sel) return;
-      const list = categories.length > 0 ? categories : ['Ostatní'];
-      sel.innerHTML = list.map(cat => `<option value="${cat.replace(/"/g, '&quot;')}">${cat}</option>`).join('');
+      const base = categories.length > 0 ? [...categories] : ['Ostatní'];
+      if (selectedCat && !base.includes(selectedCat)) {
+        base.push(selectedCat);
+      }
+      sel.innerHTML = base.map(cat => `<option value="${escapeHtmlAttr(cat)}">${escapeHtmlAttr(cat)}</option>`).join('');
+      if (selectedCat) {
+        sel.value = selectedCat;
+      }
     }
 
     function renderStockCategories() {
@@ -2044,19 +2035,34 @@
 
     function renderStockList() {
       const container = document.getElementById('stock-items-list');
-      container.innerHTML = products.map(p => `
+      container.innerHTML = products.map(p => {
+        const itemCats = [...new Set([...categories, ...(p.category ? [p.category] : [])])];
+        const catOptions = itemCats.map(cat =>
+          `<option value="${escapeHtmlAttr(cat)}" ${cat === p.category ? 'selected' : ''}>${escapeHtmlAttr(cat)}</option>`
+        ).join('');
+
+        return `
         <div class="p-2.5 rounded-2xl bg-white border border-slate-200 space-y-2">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2.5 min-w-0">
               <span class="text-2xl shrink-0">${p.icon}</span>
               <div class="min-w-0">
                 <div class="font-bold text-xs text-slate-800 leading-tight truncate">${p.name}</div>
-                <div class="text-[10px] text-slate-400 font-mono truncate">${p.id} · <span class="text-emerald-600 font-bold">${p.price} Kč</span> · ${p.category}</div>
+                <div class="text-[10px] text-slate-400 font-mono truncate">${p.id} · <span class="text-emerald-600 font-bold">${p.price} Kč</span></div>
               </div>
             </div>
             <span class="text-xs font-extrabold px-2.5 py-0.5 rounded-full shrink-0 ${p.stock <= 2 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}">
               ${p.stock} ks
             </span>
+          </div>
+
+          <!-- Rychlá změna kategorie přímo u položky -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-bold text-slate-400 shrink-0">Kategorie:</span>
+            <select onchange="changeProductCategory('${p.id}', this.value)" aria-label="Změnit kategorii"
+              class="flex-1 min-w-0 px-2 py-1 bg-amber-50/70 border border-amber-200 rounded-xl text-xs font-bold text-amber-950 focus:outline-none focus:border-amber-400">
+              ${catOptions}
+            </select>
           </div>
 
           <div class="flex items-center gap-1.5 pt-1.5 border-t border-slate-100">
@@ -2069,6 +2075,9 @@
               <i data-lucide="package-plus" class="w-3.5 h-3.5"></i>
               <span>Přidat na sklad</span>
             </button>
+            <button onclick="openProductModal('${p.id}')" title="Upravit zboží" class="p-1.5 bg-amber-50 active:bg-amber-100 text-amber-800 rounded-xl border border-amber-200">
+              <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+            </button>
             <button onclick="openLabelModal('${p.id}')" title="Vytisknout štítek" class="p-1.5 bg-indigo-50 active:bg-indigo-100 text-indigo-700 rounded-xl border border-indigo-200">
               <i data-lucide="tag" class="w-3.5 h-3.5"></i>
             </button>
@@ -2077,8 +2086,22 @@
             </button>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
       lucide.createIcons();
+    }
+
+    function changeProductCategory(productId, newCategory) {
+      const prod = products.find(p => p.id === productId);
+      if (!prod || !newCategory || prod.category === newCategory) return;
+
+      prod.category = newCategory;
+      saveProducts();
+      renderStockCategories();
+      renderPosCategories();
+      renderPosGrid();
+      playSound('beep');
+      showToast(`${prod.name} → ${newCategory}`);
     }
 
     function quickAddStock(productId, delta = 1) {
@@ -2125,23 +2148,46 @@
       }
 
       productToRestock.stock += amt;
-      const name = productToRestock.name;
-      const total = productToRestock.stock;
+      const prodName = productToRestock.name;
+      const newStock = productToRestock.stock;
       saveProducts();
       closeRestockModal();
       renderStockList();
       renderPosGrid();
       playSound('kaching');
-      showToast(`Naskladněno: ${name} +${amt} ks (celkem ${total} ks)`);
+      showToast(`Naskladněno +${amt} ks: ${prodName} (${newStock} ks)`);
     }
 
-    function openProductModal() {
+    function openProductModal(productId = null) {
       playSound('click');
-      renderCategorySelect();
-      document.getElementById('form-product').reset();
-      document.getElementById('prod-id').value = '';
-      const nextNum = products.length + 1;
-      document.getElementById('prod-sku').value = `PRD-${String(nextNum).padStart(3, '0')}`;
+      const form = document.getElementById('form-product');
+      const titleEl = document.getElementById('modal-product-title');
+      form.reset();
+
+      if (productId) {
+        const prod = products.find(p => p.id === productId);
+        if (!prod) return;
+        renderCategorySelect(prod.category);
+        if (titleEl) titleEl.innerText = 'Upravit zboží';
+        document.getElementById('prod-id').value = prod.id;
+        document.getElementById('prod-sku').value = prod.id;
+        document.getElementById('prod-name').value = prod.name;
+        document.getElementById('prod-price').value = prod.price;
+        document.getElementById('prod-stock').value = prod.stock;
+        document.getElementById('prod-icon').value = prod.icon;
+      } else {
+        renderCategorySelect();
+        if (titleEl) titleEl.innerText = 'Přidat zboží';
+        document.getElementById('prod-id').value = '';
+        let nextNum = products.length + 1;
+        let candidate = `PRD-${String(nextNum).padStart(3, '0')}`;
+        while (products.some(p => p.id === candidate)) {
+          nextNum++;
+          candidate = `PRD-${String(nextNum).padStart(3, '0')}`;
+        }
+        document.getElementById('prod-sku').value = candidate;
+      }
+
       document.getElementById('modal-product').classList.remove('hidden');
     }
 
@@ -2157,6 +2203,7 @@
     function saveProduct(e) {
       e.preventDefault();
       playSound('click');
+      const editId = document.getElementById('prod-id').value.trim();
       const sku = document.getElementById('prod-sku').value.trim().toUpperCase();
       const name = document.getElementById('prod-name').value.trim();
       const price = parseInt(document.getElementById('prod-price').value) || 0;
@@ -2164,13 +2211,30 @@
       const category = document.getElementById('prod-category').value;
       const icon = document.getElementById('prod-icon').value.trim() || '📦';
 
-      if (products.some(p => p.id === sku)) {
-        playSound('error');
-        showToast('Tento kód (SKU) již existuje!');
-        return;
+      if (editId) {
+        if (sku !== editId && products.some(p => p.id === sku)) {
+          playSound('error');
+          showToast('Tento kód (SKU) již existuje!');
+          return;
+        }
+        const prod = products.find(p => p.id === editId);
+        if (!prod) return;
+        prod.id = sku;
+        prod.name = name;
+        prod.price = price;
+        prod.stock = stock;
+        prod.category = category;
+        prod.icon = icon;
+        showToast(`Zboží „${name}“ upraveno`);
+      } else {
+        if (products.some(p => p.id === sku)) {
+          playSound('error');
+          showToast('Tento kód (SKU) již existuje!');
+          return;
+        }
+        products.push({ id: sku, name, price, stock, category, icon });
       }
 
-      products.push({ id: sku, name, price, stock, category, icon });
       saveProducts();
       closeProductModal();
       renderStockCategories();
