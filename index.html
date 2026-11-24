@@ -467,14 +467,27 @@
         </button>
       </div>
 
-      <!-- Scanner Camera Stream -->
-      <div id="qr-reader" class="w-full h-56 bg-slate-950 rounded-2xl overflow-hidden border-2 border-indigo-400"></div>
+      <!-- Scanner Camera Stream (větší a ostřejší náhled pro malé QR) -->
+      <div id="qr-reader" class="w-full h-72 bg-slate-950 rounded-2xl overflow-hidden border-2 border-indigo-400"></div>
+
+      <!-- Ovládání přiblížení (Zoom) a svítilny pro malé etikety -->
+      <div id="scanner-camera-tools" class="w-full flex items-center justify-between gap-1.5 mt-2 hidden">
+        <div id="scanner-zoom-group" class="flex-1 flex gap-1 hidden">
+          <button type="button" onclick="setScannerZoom(1)" data-zoom="1" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 text-white">1×</button>
+          <button type="button" onclick="setScannerZoom(1.5)" data-zoom="1.5" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700">1.5×</button>
+          <button type="button" onclick="setScannerZoom(2)" data-zoom="2" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700">2×</button>
+        </div>
+        <button type="button" id="btn-scanner-torch" onclick="toggleScannerTorch()" class="hidden px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 flex items-center gap-1">
+          <i data-lucide="flashlight" class="w-3.5 h-3.5"></i>
+          <span>Světlo</span>
+        </button>
+      </div>
 
       <p id="scanner-instruction-text" class="text-[11px] text-slate-500 mt-2 text-center">
-        Namiř fotoaparát na kód výrobku nebo platební karty.
+        Drž telefon cca 12–18 cm od etikety (případně zapni 2× přiblížení).
       </p>
 
-      <button onclick="closeScannerModal()" class="w-full mt-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
+      <button onclick="closeScannerModal()" class="w-full mt-2.5 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
         Zavřít
       </button>
     </div>
@@ -744,7 +757,13 @@
         </div>
       </div>
 
-      <div class="flex gap-2 w-full mt-3">
+      <!-- Posun štítku k tisku (+20 mm) -->
+      <button onclick="feedLabelAlign(20)" class="w-full mt-2.5 py-2 bg-amber-50 active:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition">
+        <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+        <span>Posunout štítek k tisku (+20 mm)</span>
+      </button>
+
+      <div class="flex gap-2 w-full mt-2">
         <button onclick="closeLabelModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
           Zavřít
         </button>
@@ -1582,8 +1601,99 @@
        ========================================================================= */
     let html5QrCode = null;
     let isScannerStarting = false;
+    let scannerTorchOn = false;
+    let lastScanErrorAt = 0;
 
-    function openScannerModal(context = 'product') {
+    function getActiveCameraTrack() {
+      const videoEl = document.querySelector('#qr-reader video');
+      if (videoEl && videoEl.srcObject && typeof videoEl.srcObject.getVideoTracks === 'function') {
+        const tracks = videoEl.srcObject.getVideoTracks();
+        if (tracks && tracks.length > 0) return tracks[0];
+      }
+      return null;
+    }
+
+    function initScannerCameraTools() {
+      const toolsWrap = document.getElementById('scanner-camera-tools');
+      const zoomGroup = document.getElementById('scanner-zoom-group');
+      const torchBtn = document.getElementById('btn-scanner-torch');
+      if (!toolsWrap) return;
+
+      toolsWrap.classList.add('hidden');
+      zoomGroup.classList.add('hidden');
+      torchBtn.classList.add('hidden');
+      scannerTorchOn = false;
+
+      const track = getActiveCameraTrack();
+      if (!track || typeof track.getCapabilities !== 'function') return;
+
+      try {
+        const caps = track.getCapabilities();
+        let hasAnyTool = false;
+
+        if (caps && caps.zoom && caps.zoom.max > 1) {
+          zoomGroup.classList.remove('hidden');
+          hasAnyTool = true;
+          // Automaticky jemné přiblížení 1.5x pomáhá iPhonu 8 zaostřit malý 12.5mm QR kód z větší dálky
+          const defaultZoom = Math.min(1.5, caps.zoom.max);
+          setScannerZoom(defaultZoom);
+        }
+
+        if (caps && caps.torch) {
+          torchBtn.classList.remove('hidden');
+          hasAnyTool = true;
+        }
+
+        if (hasAnyTool) {
+          toolsWrap.classList.remove('hidden');
+          lucide.createIcons();
+        }
+      } catch (e) {
+        console.warn('Camera capabilities check skipped:', e);
+      }
+    }
+
+    async function setScannerZoom(level) {
+      const track = getActiveCameraTrack();
+      if (!track || typeof track.applyConstraints !== 'function') return;
+      try {
+        const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : null;
+        const clamped = caps && caps.zoom
+          ? Math.max(caps.zoom.min || 1, Math.min(caps.zoom.max, level))
+          : level;
+        await track.applyConstraints({ advanced: [{ zoom: clamped }] });
+
+        document.querySelectorAll('.scanner-zoom-btn').forEach(btn => {
+          const val = parseFloat(btn.getAttribute('data-zoom'));
+          const active = Math.abs(val - level) < 0.1;
+          btn.className = active
+            ? 'scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 text-white'
+            : 'scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700';
+        });
+      } catch (e) {
+        console.warn('Zoom constraint failed:', e);
+      }
+    }
+
+    async function toggleScannerTorch() {
+      const track = getActiveCameraTrack();
+      const torchBtn = document.getElementById('btn-scanner-torch');
+      if (!track || typeof track.applyConstraints !== 'function') return;
+      try {
+        scannerTorchOn = !scannerTorchOn;
+        await track.applyConstraints({ advanced: [{ torch: scannerTorchOn }] });
+        if (torchBtn) {
+          torchBtn.className = scannerTorchOn
+            ? 'px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500 text-white flex items-center gap-1'
+            : 'px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 flex items-center gap-1';
+        }
+      } catch (e) {
+        scannerTorchOn = false;
+        showToast('Svítilnu nelze v tomto režimu zapnout');
+      }
+    }
+
+    async function openScannerModal(context = 'product') {
       playSound('click');
       scannerContext = context;
       const modal = document.getElementById('modal-scanner');
@@ -1592,29 +1702,75 @@
 
       if (context === 'card_payment') {
         title.innerHTML = `<i data-lucide="credit-card" class="w-4 h-4 text-indigo-600"></i><span>Skenovat platební kartu</span>`;
-        instr.innerText = 'Namiř kameru na QR kód na zadní nebo přední straně dětské karty.';
+        instr.innerText = 'Namiř kameru na QR kód platební karty (cca 12–18 cm daleko).';
       } else {
         title.innerHTML = `<i data-lucide="scan" class="w-4 h-4 text-blue-600"></i><span>Skenovat zboží</span>`;
-        instr.innerText = 'Namiř kameru na QR kód na štítku zboží.';
+        instr.innerText = 'Drž telefon cca 12–18 cm od etikety (případně použij 1.5× / 2× zoom).';
       }
 
       modal.classList.remove('hidden');
       lucide.createIcons();
 
       if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("qr-reader");
+        const ctorOpts = { verbose: false };
+        if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+          ctorOpts.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
+        }
+        html5QrCode = new Html5Qrcode("qr-reader", ctorOpts);
       }
-      
-      const config = { fps: 12, qrbox: { width: 200, height: 200 } };
+
+      // Vyšší rozlišení (HD) + nativní BarcodeDetector (pokud je k dispozici) výrazně zlepší čtení malých 12.5mm QR kódů
+      const hdConfig = {
+        fps: 15,
+        qrbox: (vw, vh) => {
+          const side = Math.floor(Math.min(vw, vh) * 0.82);
+          return { width: Math.max(180, side), height: Math.max(180, side) };
+        },
+        disableFlip: false,
+        videoConstraints: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          focusMode: { ideal: "continuous" }
+        },
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      };
+
+      const fallbackConfig = {
+        fps: 15,
+        qrbox: { width: 220, height: 220 },
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      };
+
       isScannerStarting = true;
 
-      html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
-        handleQrDetected(decodedText.trim());
-      }).catch(err => {
-        console.warn("Camera start failed: ", err);
-      }).finally(() => {
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          hdConfig,
+          (decodedText) => handleQrDetected(decodedText.trim())
+        );
+        setTimeout(initScannerCameraTools, 350);
+      } catch (err) {
+        console.warn("HD camera start failed, retrying basic mode:", err);
+        try {
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            fallbackConfig,
+            (decodedText) => handleQrDetected(decodedText.trim())
+          );
+          setTimeout(initScannerCameraTools, 350);
+        } catch (err2) {
+          console.warn("Camera start failed:", err2);
+          showToast('Kameru se nepodařilo spustit.');
+        }
+      } finally {
         isScannerStarting = false;
-      });
+      }
     }
 
     function handleQrDetected(code) {
@@ -1627,13 +1783,21 @@
           addToBasket(product.id);
           closeScannerModal();
         } else {
-          playSound('error');
+          const now = Date.now();
+          if (now - lastScanErrorAt > 1200) {
+            lastScanErrorAt = now;
+            playSound('error');
+            showToast(`Neznámý kód: ${code}`);
+          }
         }
       }
     }
 
     async function closeScannerModal() {
       document.getElementById('modal-scanner').classList.add('hidden');
+      const toolsWrap = document.getElementById('scanner-camera-tools');
+      if (toolsWrap) toolsWrap.classList.add('hidden');
+      scannerTorchOn = false;
 
       if (html5QrCode) {
         // If start is still resolving, wait briefly
@@ -2320,6 +2484,34 @@
       }
     }
 
+    /* Přesný posun etikety v milimetrech (např. 20 mm = 160 px při 8 px/mm) */
+    async function feedLabelAlign(mm = 20) {
+      playSound('click');
+      if (!(await ensurePrinterReady())) {
+        showToast('Nejprve připoj tiskárnu.');
+        return;
+      }
+
+      const feedPx = Math.max(1, Math.round(mm * 8));
+      btLog(`Posun etikety o ${mm} mm (${feedPx} px, protokol ${printerProtocol})...`);
+
+      try {
+        if (printerProtocol.startsWith('x6')) {
+          await writeBleBytes(makeX6Packet(0xA6, X6_LATTICE_START), 20, 20);
+          await writeBleBytes(makeX6Packet(0xA1, [feedPx & 0xFF, (feedPx >> 8) & 0xFF]), 20, 25);
+          await writeBleBytes(makeX6Packet(0xA6, X6_LATTICE_END), 20, 20);
+        } else {
+          // ESC J n – přesný posun papíru o n bodů
+          await writeBleBytes(new Uint8Array([0x1B, 0x4A, Math.min(255, feedPx)]), 64, 15);
+        }
+        btLog(`Posun o ${mm} mm dokončen.`);
+        showToast(`Štítek posunut o ${mm} mm`);
+      } catch (e) {
+        btLog('CHYBA posuvu etikety: ' + (e.message || e));
+        showToast('Chyba posuvu: ' + (e.message || e));
+      }
+    }
+
     async function printX6TestPage() {
       if (!btCharacteristic) {
         showToast('Nejprve připoj tiskárnu X6.');
@@ -2489,55 +2681,87 @@
       ctx.fillText(`${sale.totalPrice} Kč`, 372, y);
       y += 30;
 
-      // Detail platby
-      ctx.textAlign = 'left';
-      ctx.font = '16px sans-serif';
+      // Platební údaje (karta vs. hotovost)
+      ctx.textAlign = 'right';
+      ctx.font = '15px sans-serif';
       if (sale.paymentType === 'card') {
-        ctx.fillText(`Platba kartou: ${sale.cardOwner}`, 12, y);
+        ctx.fillText(`Placeno kartou: ${sale.cardOwner}`, 372, y);
+        y += 22;
+        ctx.fillText(`Zůstatek na kartě: ${sale.remainingBalance} Kč`, 372, y);
         y += 24;
-        ctx.font = 'bold 16px monospace';
-        ctx.fillText(`Zůstatek na kartě: ${sale.remainingBalance} Kč`, 12, y);
       } else {
-        ctx.fillText(`Přijato hotově: ${sale.cashGiven} Kč`, 12, y);
+        ctx.fillText(`Hotovost: ${sale.cashGiven} Kč`, 372, y);
+        y += 22;
+        ctx.fillText(`Vráceno: ${sale.changeToReturn} Kč`, 372, y);
         y += 24;
-        ctx.font = 'bold 16px monospace';
-        ctx.fillText(`Vráceno: ${sale.changeToReturn} Kč`, 12, y);
       }
 
-      y += 38;
+      // Spodní čára a poděkování
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.moveTo(10, y);
+      ctx.lineTo(374, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      y += 26;
+
       ctx.textAlign = 'center';
-      ctx.font = 'bold 18px sans-serif';
-      ctx.fillText('Děkujeme za tvůj nákup! :)', 192, y);
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('Děkujeme za tvůj nákup!', 192, y);
 
       return canvas;
     }
 
-    /* Pomocné vykreslení QR kódu do Canvasu pro rastrový tisk */
+    /* Pomocné vykreslení QR kódu do Canvasu pro rastrový tisk (pixel-perfect bez rozmazání) */
     function createQrCanvas(text, size = 180) {
       const tempDiv = document.createElement('div');
       tempDiv.style.position = 'fixed';
       tempDiv.style.left = '-9999px';
       document.body.appendChild(tempDiv);
 
-      new QRCode(tempDiv, {
+      // CorrectLevel.L udržuje QR kód jednodušší (21x21 modulů pro PRD-001) -> větší a lépe čitelné čtverečky na 12.5mm etiketě
+      const qrInstance = new QRCode(tempDiv, {
         text: text,
         width: size,
         height: size,
         colorDark: "#000000",
         colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.M
+        correctLevel: QRCode.CorrectLevel.L
       });
 
-      const qrCanvas = tempDiv.querySelector('canvas');
       const out = document.createElement('canvas');
       out.width = size;
       out.height = size;
       const ctx = out.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, size, size);
-      if (qrCanvas) {
-        ctx.drawImage(qrCanvas, 0, 0, size, size);
+
+      // Přímé překreslení matice QR kódu celočíselnými pixely + čistý bílý okraj (quiet zone)
+      const model = qrInstance && qrInstance._oQRCode;
+      if (model && typeof model.getModuleCount === 'function') {
+        const count = model.getModuleCount();
+        const quietModules = 2; // 2 moduly bílého okraje ze všech stran
+        const totalModules = count + quietModules * 2;
+        const cell = Math.max(1, Math.floor(size / totalModules));
+        const qrPx = count * cell;
+        const offset = Math.floor((size - qrPx) / 2);
+
+        ctx.fillStyle = '#000000';
+        for (let r = 0; r < count; r++) {
+          for (let c = 0; c < count; c++) {
+            if (model.isDark(r, c)) {
+              ctx.fillRect(offset + c * cell, offset + r * cell, cell, cell);
+            }
+          }
+        }
+      } else {
+        const qrCanvas = tempDiv.querySelector('canvas');
+        if (qrCanvas) {
+          ctx.drawImage(qrCanvas, 0, 0, size, size);
+        }
       }
+
       document.body.removeChild(tempDiv);
       return out;
     }
