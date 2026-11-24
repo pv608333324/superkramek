@@ -709,17 +709,42 @@
   <!-- ========================================================================= -->
   <div id="modal-label" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
     <div class="bg-white rounded-3xl max-w-sm w-full p-4 text-center flex flex-col items-center">
-      <h3 class="text-sm font-bold text-slate-800 mb-1">Štítek na zboží (58mm)</h3>
+      <h3 class="text-sm font-bold text-slate-800 mb-0.5">Etiketa na zboží (25 × 15 mm)</h3>
+      <p class="text-[10px] text-slate-500 mb-2">Krok posuvu: 18 mm (15 mm etiketa + 3 mm mezera)</p>
 
-      <div class="w-[190px] border-2 border-dashed border-slate-300 p-3 rounded-xl bg-white shadow-inner flex flex-col items-center my-2">
-        <div id="label-emoji" class="text-2xl">🍎</div>
-        <div id="label-name" class="font-bold text-xs text-slate-900 leading-tight">Čerstvé jablko</div>
-        <div id="label-price" class="text-base font-black text-slate-900 my-0.5 font-mono">15 Kč</div>
-        <div id="label-qr" class="my-1 bg-white p-1"></div>
-        <div id="label-sku" class="text-[9px] font-mono tracking-widest text-slate-500">PRD-001</div>
+      <!-- 25x15 mm (5:3) horizontal label preview -->
+      <div class="w-[200px] h-[120px] border-2 border-dashed border-slate-400 p-1.5 rounded-lg bg-white shadow-inner flex items-center gap-2 my-1">
+        <div id="label-qr" class="shrink-0 bg-white flex items-center justify-center"></div>
+        <div class="flex-1 min-w-0 flex flex-col items-center justify-center text-center leading-tight">
+          <div id="label-name" class="font-bold text-[11px] text-slate-900 line-clamp-2 w-full">Čerstvé jablko</div>
+          <div id="label-price" class="text-base font-black text-slate-900 my-0.5 font-mono">15 Kč</div>
+          <div id="label-sku" class="text-[9px] font-mono tracking-wider text-slate-600">PRD-001</div>
+        </div>
       </div>
 
-      <div class="flex gap-2 w-full mt-2">
+      <!-- Label print options: quantity & horizontal alignment on 58mm roll -->
+      <div class="w-full grid grid-cols-2 gap-2 mt-2.5 text-left">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Počet etiket</label>
+          <select id="label-print-qty" class="w-full px-2 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 text-slate-800">
+            <option value="1" selected>1 ks</option>
+            <option value="2">2 ks</option>
+            <option value="3">3 ks</option>
+            <option value="5">5 ks</option>
+            <option value="10">10 ks</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Pozice v tiskárně</label>
+          <select id="label-print-align" onchange="saveLabelAlign(this.value)" class="w-full px-2 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-slate-50 text-slate-800">
+            <option value="left">Vlevo</option>
+            <option value="center" selected>Na střed</option>
+            <option value="right">Vpravo</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex gap-2 w-full mt-3">
         <button onclick="closeLabelModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs">
           Zavřít
         </button>
@@ -1748,23 +1773,28 @@
       labelItemToPrint = products.find(p => p.id === productId);
       if (!labelItemToPrint) return;
 
-      document.getElementById('label-emoji').innerText = labelItemToPrint.icon;
       document.getElementById('label-name').innerText = labelItemToPrint.name;
       document.getElementById('label-price').innerText = `${labelItemToPrint.price} Kč`;
       document.getElementById('label-sku').innerText = labelItemToPrint.id;
+      document.getElementById('label-print-qty').value = '1';
+      document.getElementById('label-print-align').value = localStorage.getItem('kids_pos_label_align') || 'center';
 
       const qrContainer = document.getElementById('label-qr');
       qrContainer.innerHTML = '';
       new QRCode(qrContainer, {
         text: labelItemToPrint.id,
-        width: 80,
-        height: 80,
+        width: 86,
+        height: 86,
         colorDark: "#000000",
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.M
       });
 
       document.getElementById('modal-label').classList.remove('hidden');
+    }
+
+    function saveLabelAlign(val) {
+      localStorage.setItem('kids_pos_label_align', val);
     }
 
     function closeLabelModal() {
@@ -2176,17 +2206,18 @@
     }
 
     /* Převod 384px Canvasu a přímý tisk na X6 Mini Printer */
-    async function sendCanvasToX6(canvas) {
+    async function sendCanvasToX6(canvas, options = {}) {
       if (!btCharacteristic) return false;
       if (isPrintingNow) {
         showToast('Počkej, tiskárna právě tiskne...');
         return false;
       }
 
+      const feedPx = typeof options.feedPx === 'number' ? options.feedPx : 104;
       isPrintingNow = true;
       btFlowPaused = false;
       updatePrintProgress(true, 0, 'Příprava tisku X6...');
-      btLog(`Start tisku (${printerProtocol}, ${canvas.width}x${canvas.height}, sytost ${printerEnergy})`);
+      btLog(`Start tisku (${printerProtocol}, ${canvas.width}x${canvas.height}, posuv ${feedPx}px, sytost ${printerEnergy})`);
 
       try {
         const width = 384;
@@ -2246,8 +2277,10 @@
           }
         }
 
-        // 3. Posun papíru za odtrhávací hranu + ukončení tisku
-        await writeBleBytes(makeX6Packet(0xA1, [0x68, 0x00]), 20, 25);   // Posun 104 px
+        // 3. Přesný posun papíru + ukončení tisku
+        if (feedPx > 0) {
+          await writeBleBytes(makeX6Packet(0xA1, [feedPx & 0xFF, (feedPx >> 8) & 0xFF]), 20, 25);
+        }
         await writeBleBytes(makeX6Packet(0xA6, X6_LATTICE_END), 20, 25); // Konec tisku
 
         btLog('Tisk dokončen OK.');
@@ -2322,7 +2355,7 @@
     }
 
     /* Převod Canvasu (384 px) do ESC/POS rastru GS v 0 (MSB-first) */
-    function canvasToEscPosRaster(canvas) {
+    function canvasToEscPosRaster(canvas, options = {}) {
       const width = 384;
       const widthBytes = 48; // 384 / 8
 
@@ -2348,7 +2381,10 @@
         widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
         h & 0xFF, (h >> 8) & 0xFF
       ];
-      const feed = [0x0A, 0x0A, 0x0A, 0x0A];
+      // Přesný posun v bodech (ESC J n) pokud je zadán feedPx, jinak standardní odřádkování
+      const feed = typeof options.feedPx === 'number'
+        ? (options.feedPx > 0 ? [0x1B, 0x4A, Math.min(255, options.feedPx)] : [])
+        : [0x0A, 0x0A, 0x0A, 0x0A];
 
       const bitmap = new Uint8Array(widthBytes * h);
       for (let y = 0; y < h; y++) {
@@ -2377,12 +2413,12 @@
     }
 
     /* Jednotný rozcestník pro tisk Canvasu na připojenou BT tiskárnu (X6 nebo ESC/POS) */
-    async function printCanvasToBluetooth(canvas) {
+    async function printCanvasToBluetooth(canvas, options = {}) {
       if (!btCharacteristic) return false;
       if (printerProtocol.startsWith('x6')) {
-        return await sendCanvasToX6(canvas);
+        return await sendCanvasToX6(canvas, options);
       } else {
-        const rasterBytes = canvasToEscPosRaster(canvas);
+        const rasterBytes = canvasToEscPosRaster(canvas, options);
         return await writeBleBytes(rasterBytes, 64, 18);
       }
     }
@@ -2563,7 +2599,7 @@
       closeSuccessModal();
     }
 
-    /* Print plastic card sticker (with QR Raster via Bluetooth X6/ESC-POS or Fallback) */
+    /* Print bank payment card with QR code (384px raster for X6/ESC-POS or Fallback) */
     async function executeCardPrint() {
       if (!cardItemToPrint) return;
       playSound('beep');
@@ -2573,32 +2609,36 @@
         canvas.width = 384;
         canvas.height = 310;
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
 
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 384, 310);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Rámeček karty
+        // Card border
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 4;
-        ctx.strokeRect(8, 8, 368, 294);
+        ctx.strokeRect(10, 10, 364, 290);
 
+        // Header
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.font = 'bold 20px sans-serif';
-        ctx.fillText('DĚTSKÁ NÁRODNÍ BANKA', 192, 38);
+        ctx.fillText('DĚTSKÁ NÁRODNÍ BANKA', 192, 42);
 
-        ctx.font = 'bold 14px monospace';
-        ctx.fillText('PLATEBNÍ KARTA', 192, 60);
+        ctx.font = 'bold 13px monospace';
+        ctx.fillText('PLATEBNÍ KARTA · DEBIT', 192, 62);
 
-        // QR kód karty
-        const qrCanvas = createQrCanvas(cardItemToPrint.id, 160);
-        ctx.drawImage(qrCanvas, (384 - 160) / 2, 72);
+        // QR Code
+        const qrSize = 150;
+        const qrCanvas = createQrCanvas(cardItemToPrint.id, qrSize);
+        ctx.drawImage(qrCanvas, Math.round((384 - qrSize) / 2), 74, qrSize, qrSize);
 
-        ctx.font = 'bold 24px sans-serif';
-        ctx.fillText(cardItemToPrint.owner.toUpperCase(), 192, 262);
+        // Owner & Card ID
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText(cardItemToPrint.owner.toUpperCase(), 192, 256);
 
-        ctx.font = 'bold 16px monospace';
-        ctx.fillText(cardItemToPrint.id, 192, 288);
+        ctx.font = 'bold 15px monospace';
+        ctx.fillText(cardItemToPrint.id, 192, 282);
 
         const ok = await printCanvasToBluetooth(canvas);
         if (ok) {
@@ -2609,16 +2649,16 @@
         return;
       }
 
-      // Fallback
+      // System Fallback Print
       const qrCanvas = document.querySelector('#card-print-qr canvas');
       const qrImg = qrCanvas ? qrCanvas.toDataURL() : '';
       const area = document.getElementById('printable-receipt-area');
       area.innerHTML = `
-        <div style="text-align: center; border: 2px solid #000; padding: 6px; border-radius: 6px;">
+        <div style="text-align: center; border: 2px dashed #000; padding: 6px; border-radius: 8px;">
           <div style="font-size: 9px; font-weight: bold; letter-spacing: 1px;">DĚTSKÁ NÁRODNÍ BANKA</div>
-          <div style="font-size: 8px; margin-bottom: 4px;">PLATEBNÍ KARTA S QR KÓDEM</div>
-          ${qrImg ? `<img src="${qrImg}" style="width: 80px; height: 80px; margin: 2px auto; display: block;" />` : ''}
-          <div style="font-size: 12px; font-weight: bold; margin-top: 4px;">${cardItemToPrint.owner}</div>
+          <div style="font-size: 8px; font-family: monospace; margin: 2px 0;">DEBIT CARD</div>
+          ${qrImg ? `<img src="${qrImg}" style="width: 24mm; height: 24mm; margin: 4px auto; display: block;" />` : ''}
+          <div style="font-size: 12px; font-weight: 900; text-transform: uppercase;">${cardItemToPrint.owner}</div>
           <div style="font-size: 10px; font-family: monospace;">${cardItemToPrint.id}</div>
         </div>
       `;
@@ -2626,42 +2666,105 @@
       closeCardPrintModal();
     }
 
-    /* Print product label (with QR Raster via Bluetooth X6/ESC-POS or Fallback) */
+    /* Pomocné zalomení textu pro malé etikety (25x15 mm) */
+    function wrapTextLines(ctx, text, maxWidth, maxLines = 2) {
+      const words = String(text || '').trim().split(/\s+/);
+      const lines = [];
+      let current = '';
+
+      for (const word of words) {
+        const test = current ? `${current} ${word}` : word;
+        if (ctx.measureText(test).width <= maxWidth) {
+          current = test;
+        } else {
+          if (current) lines.push(current);
+          current = word;
+          if (lines.length >= maxLines - 1) break;
+        }
+      }
+      if (current && lines.length < maxLines) lines.push(current);
+
+      // Ořez příliš dlouhého slova, pokud přetéká
+      return lines.map(line => {
+        let s = line;
+        while (s.length > 1 && ctx.measureText(s).width > maxWidth) {
+          s = s.slice(0, -1);
+        }
+        return s;
+      });
+    }
+
+    /* Print product label: 25 x 15 mm (200 x 120 px @ 8 px/mm), pitch 18 mm (144 px) */
     async function executeLabelPrint() {
       if (!labelItemToPrint) return;
       playSound('beep');
 
+      const qty = Math.max(1, parseInt(document.getElementById('label-print-qty')?.value || '1', 10));
+      const align = document.getElementById('label-print-align')?.value || 'center';
+
       if (await ensurePrinterReady()) {
+        // Rozměry při 203 DPI (8 px / mm) pro 48 mm (384 px) termohlavu X6
+        const PRINTHEAD_W = 384;
+        const LABEL_W = 200; // 25 mm
+        const LABEL_H = 120; // 15 mm
+        const PITCH_H = 144; // 18 mm (15 mm etiketa + 3 mm mezera = 24 px)
+        const GAP_H = PITCH_H - LABEL_H; // 24 px
+
+        // Horizontální umístění 25mm etikety na 48mm tiskové hlavě
+        let xOff = Math.round((PRINTHEAD_W - LABEL_W) / 2); // střed = 92 px
+        if (align === 'left') xOff = 0;
+        else if (align === 'right') xOff = PRINTHEAD_W - LABEL_W; // 184 px
+
+        // Výška výsledného plátna pro qty etiket s přesným krokem 144 px (18 mm)
+        const totalH = (qty - 1) * PITCH_H + LABEL_H;
         const canvas = document.createElement('canvas');
-        canvas.width = 384;
-        canvas.height = 310;
+        canvas.width = PRINTHEAD_W;
+        canvas.height = totalH;
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
 
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 384, 310);
+        ctx.fillRect(0, 0, PRINTHEAD_W, totalH);
 
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([8, 6]);
-        ctx.strokeRect(8, 8, 368, 294);
-        ctx.setLineDash([]);
+        // QR kód 100x100 px (12.5 x 12.5 mm) – snadno čitelný kamerou
+        const qrSize = 100;
+        const qrCanvas = createQrCanvas(labelItemToPrint.id, qrSize);
 
-        ctx.fillStyle = '#000000';
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 22px sans-serif';
-        ctx.fillText(labelItemToPrint.name.slice(0, 22), 192, 42);
+        for (let i = 0; i < qty; i++) {
+          const yOff = i * PITCH_H;
 
-        ctx.font = 'bold 34px monospace';
-        ctx.fillText(`${labelItemToPrint.price} Kč`, 192, 82);
+          // Levá část: QR kód (quiet zone min. 6 px kolem)
+          ctx.drawImage(qrCanvas, xOff + 6, yOff + 10, qrSize, qrSize);
 
-        // QR kód položky
-        const qrCanvas = createQrCanvas(labelItemToPrint.id, 165);
-        ctx.drawImage(qrCanvas, (384 - 165) / 2, 95);
+          // Pravá část: Název, cena a kód (šířka 86 px)
+          const textCenterX = xOff + 110 + 43; // střed pravého sloupce
+          const textMaxW = 84;
 
-        ctx.font = 'bold 16px monospace';
-        ctx.fillText(labelItemToPrint.id, 192, 286);
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'center';
 
-        const ok = await printCanvasToBluetooth(canvas);
+          // Název zboží (1–2 řádky)
+          ctx.font = 'bold 14px sans-serif';
+          const nameLines = wrapTextLines(ctx, labelItemToPrint.name, textMaxW, 2);
+          if (nameLines.length === 1) {
+            ctx.fillText(nameLines[0], textCenterX, yOff + 34);
+          } else {
+            ctx.fillText(nameLines[0], textCenterX, yOff + 26);
+            ctx.fillText(nameLines[1], textCenterX, yOff + 42);
+          }
+
+          // Cena výrazně
+          ctx.font = 'bold 23px sans-serif';
+          ctx.fillText(`${labelItemToPrint.price} Kč`, textCenterX, yOff + 76);
+
+          // SKU kód dole
+          ctx.font = 'bold 11px monospace';
+          ctx.fillText(labelItemToPrint.id, textCenterX, yOff + 104);
+        }
+
+        // Za poslední etiketou posuneme přesně o mezeru (23 px + 1 px úvodní bílý řádek u X6 = 24 px => celkový krok přesně 18 mm)
+        const endFeedPx = printerProtocol.startsWith('x6') ? (GAP_H - 1) : GAP_H;
+        const ok = await printCanvasToBluetooth(canvas, { feedPx: endFeedPx });
         if (ok) {
           closeLabelModal();
           return;
@@ -2670,19 +2773,25 @@
         return;
       }
 
+      // System Fallback Print (25 x 15 mm, krok 18 mm)
       const qrCanvas = document.querySelector('#label-qr canvas');
       const qrImg = qrCanvas ? qrCanvas.toDataURL() : '';
       const area = document.getElementById('printable-receipt-area');
 
-      area.innerHTML = `
-        <div style="text-align: center; border: 1px dashed #000; padding: 4px;">
-          <div style="font-size: 18px;">${labelItemToPrint.icon}</div>
-          <div style="font-size: 11px; font-weight: bold;">${labelItemToPrint.name}</div>
-          <div style="font-size: 14px; font-weight: 900; margin: 2px 0;">${labelItemToPrint.price} Kč</div>
-          ${qrImg ? `<img src="${qrImg}" style="width: 75px; height: 75px; margin: 2px auto; display: block;" />` : ''}
-          <div style="font-size: 8px; font-family: monospace;">${labelItemToPrint.id}</div>
-        </div>
-      `;
+      let htmlLabels = '';
+      for (let i = 0; i < qty; i++) {
+        htmlLabels += `
+          <div style="width: 25mm; height: 15mm; margin: 0 auto 3mm auto; box-sizing: border-box; border: 0.3mm dashed #000; padding: 1mm; display: flex; align-items: center; gap: 1mm; overflow: hidden;">
+            ${qrImg ? `<img src="${qrImg}" style="width: 12mm; height: 12mm; flex-shrink: 0;" />` : ''}
+            <div style="flex: 1; text-align: center; line-height: 1.1; overflow: hidden;">
+              <div style="font-size: 7px; font-weight: bold;">${labelItemToPrint.name}</div>
+              <div style="font-size: 10px; font-weight: 900; margin: 1px 0;">${labelItemToPrint.price} Kč</div>
+              <div style="font-size: 6px; font-family: monospace;">${labelItemToPrint.id}</div>
+            </div>
+          </div>
+        `;
+      }
+      area.innerHTML = htmlLabels;
       window.print();
       closeLabelModal();
     }
