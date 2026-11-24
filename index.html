@@ -473,9 +473,9 @@
       <!-- Ovládání přiblížení (Zoom) a svítilny pro malé etikety -->
       <div id="scanner-camera-tools" class="w-full flex items-center justify-between gap-1.5 mt-2 hidden">
         <div id="scanner-zoom-group" class="flex-1 flex gap-1 hidden">
-          <button type="button" onclick="setScannerZoom(1)" data-zoom="1" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 text-white">1×</button>
-          <button type="button" onclick="setScannerZoom(1.5)" data-zoom="1.5" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700">1.5×</button>
-          <button type="button" onclick="setScannerZoom(2)" data-zoom="2" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700">2×</button>
+          <button type="button" onclick="setScannerZoom(1.5)" data-zoom="1.5" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700">1,5×</button>
+          <button type="button" onclick="setScannerZoom(2)" data-zoom="2" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 text-white">2×</button>
+          <button type="button" onclick="setScannerZoom(2.5)" data-zoom="2.5" class="scanner-zoom-btn flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700">2,5×</button>
         </div>
         <button type="button" id="btn-scanner-torch" onclick="toggleScannerTorch()" class="hidden px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 flex items-center gap-1">
           <i data-lucide="flashlight" class="w-3.5 h-3.5"></i>
@@ -1634,8 +1634,8 @@
         if (caps && caps.zoom && caps.zoom.max > 1) {
           zoomGroup.classList.remove('hidden');
           hasAnyTool = true;
-          // Automaticky jemné přiblížení 1.5x pomáhá iPhonu 8 zaostřit malý 12.5mm QR kód z větší dálky
-          const defaultZoom = Math.min(1.5, caps.zoom.max);
+          // Výchozí přiblížení 2× pomáhá iPhonu 8 zaostřit malý 12.5mm QR kód z větší dálky
+          const defaultZoom = Math.min(2, caps.zoom.max);
           setScannerZoom(defaultZoom);
         }
 
@@ -1705,7 +1705,7 @@
         instr.innerText = 'Namiř kameru na QR kód platební karty (cca 12–18 cm daleko).';
       } else {
         title.innerHTML = `<i data-lucide="scan" class="w-4 h-4 text-blue-600"></i><span>Skenovat zboží</span>`;
-        instr.innerText = 'Drž telefon cca 12–18 cm od etikety (případně použij 1.5× / 2× zoom).';
+        instr.innerText = 'Drž telefon cca 12–18 cm od etikety (výchozí přiblížení je 2×).';
       }
 
       modal.classList.remove('hidden');
