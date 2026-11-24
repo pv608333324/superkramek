@@ -757,10 +757,10 @@
         </div>
       </div>
 
-      <!-- Posun štítku k tisku (+20 mm) -->
-      <button onclick="feedLabelAlign(20)" class="w-full mt-2.5 py-2 bg-amber-50 active:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition">
+      <!-- Posun štítku k tisku (+12 mm) -->
+      <button onclick="feedLabelAlign(12)" class="w-full mt-2.5 py-2 bg-amber-50 active:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition">
         <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
-        <span>Posunout štítek k tisku (+20 mm)</span>
+        <span>Posunout štítek k tisku (+12 mm)</span>
       </button>
 
       <div class="flex gap-2 w-full mt-2">
@@ -996,8 +996,8 @@
 
     /* =========================================================================
        3. NAVIGATION TABS (IPHONE 8 OPTIMIZED)
-       ========================================================================= */
-    function switchView(viewName) {
+    /* Přesný posun etikety v milimetrech (např. 12 mm = 96 px při 8 px/mm) */
+    async function feedLabelAlign(mm = 12) {
       playSound('click');
       const tabs = ['pos', 'bank', 'stock', 'more'];
       tabs.forEach(v => {
